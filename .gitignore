@@ -1,0 +1,33 @@
+# dependencies
+code/node_modules/
+
+# environment
+.env
+code/.env
+.env.*
+!.env.example
+
+# logs
+*.log
+logs/
+pnpm-debug.log*
+
+# runtime files
+*.pid
+*.pid.lock
+
+# build/cache
+code/dist/
+code/.turbo/
+code/.cache/
+code/.bun/
+*.tsbuildinfo
+
+# coverage
+coverage/
+code/coverage/
+
+# editor / OS
+.DS_Store
+.vscode/
+.idea/
