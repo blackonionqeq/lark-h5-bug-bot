@@ -183,7 +183,13 @@ curl -X POST "http://127.0.0.1:3000/callback/analysis-result" \
 
 ---
 
-## 七、部署说明
+## 七、架构设计
+
+- Claude Code 异步分析架构设计：`docs/claude-code-analysis-architecture.md`
+
+---
+
+## 八、部署说明
 
 ### 1. 服务器要求
 

@@ -31,3 +31,5 @@ code/coverage/
 .DS_Store
 .vscode/
 .idea/
+
+tempnpm-cache
