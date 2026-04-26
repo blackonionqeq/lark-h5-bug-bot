@@ -3,6 +3,10 @@ import { createEvent, handleEvent } from "../event-processor";
 import { taskStore } from "../task-store";
 import { makeAppConfig, makeZentaoPayload, makeAnalysisCallbackPayload } from "../../test-fixtures";
 
+function mockFetch(implementation: (...args: Parameters<typeof fetch>) => ReturnType<typeof fetch>) {
+  return spyOn(globalThis, "fetch").mockImplementation(implementation as unknown as typeof fetch);
+}
+
 describe("createEvent", () => {
   it("creates an event with generated traceId and timestamp", () => {
     const event = createEvent({
@@ -37,7 +41,7 @@ describe("handleEvent", () => {
     let task = taskStore.claim();
     while (task) task = taskStore.claim();
 
-    fetchSpy = spyOn(globalThis, "fetch").mockImplementation(() =>
+    fetchSpy = mockFetch(() =>
       Promise.resolve(
         new Response(JSON.stringify({ code: 0, msg: "ok", tenant_access_token: "fake-token", data: {} }))
       )

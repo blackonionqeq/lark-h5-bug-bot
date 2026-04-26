@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach } from "bun:test";
-import { Elysia } from "elysia";
 import { createAgentTasksRouter } from "../agent-tasks";
 import { taskStore } from "../../services/task-store";
 import { makeAnalysisTask, makeTriageResult, makeAnalysisResult } from "../../test-fixtures";
@@ -14,13 +13,13 @@ function authHeaders(): Record<string, string> {
 }
 
 describe("Agent Tasks API", () => {
-  let app: Elysia;
+  let app: ReturnType<typeof createAgentTasksRouter>;
 
   beforeEach(() => {
     // Fully drain the queue
     let task = taskStore.claim();
     while (task) task = taskStore.claim();
-    app = new Elysia().use(createAgentTasksRouter(TOKEN));
+    app = createAgentTasksRouter(TOKEN);
   });
 
   describe("authentication", () => {

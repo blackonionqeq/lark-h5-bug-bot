@@ -1,24 +1,27 @@
 import { describe, it, expect, beforeEach, afterEach, spyOn } from "bun:test";
-import { Elysia } from "elysia";
 import { createZentaoRouter } from "../zentao";
 import { taskStore } from "../../services/task-store";
 import { makeAppConfig } from "../../test-fixtures";
 
+function mockFetch(implementation: (...args: Parameters<typeof fetch>) => ReturnType<typeof fetch>) {
+  return spyOn(globalThis, "fetch").mockImplementation(implementation as unknown as typeof fetch);
+}
+
 describe("POST /webhook/zentao", () => {
   let fetchSpy: ReturnType<typeof spyOn>;
-  let app: Elysia;
+  let app: ReturnType<typeof createZentaoRouter>;
 
   beforeEach(() => {
     let task = taskStore.claim();
     while (task) task = taskStore.claim();
-    fetchSpy = spyOn(globalThis, "fetch").mockImplementation(() =>
+    fetchSpy = mockFetch(() =>
       Promise.resolve(
         new Response(JSON.stringify({ code: 0, msg: "ok", tenant_access_token: "fake-token", data: {} }))
       )
     );
 
     const config = makeAppConfig();
-    app = new Elysia().use(createZentaoRouter(config));
+    app = createZentaoRouter(config);
   });
 
   afterEach(() => {
@@ -57,7 +60,7 @@ describe("POST /webhook/zentao", () => {
     fetchSpy?.mockRestore();
     fetchSpy = spyOn(globalThis, "fetch").mockRejectedValue(new Error("Network error"));
 
-    const app2 = new Elysia().use(createZentaoRouter(makeAppConfig()));
+    const app2 = createZentaoRouter(makeAppConfig());
     const res = await app2.handle(
       new Request("http://localhost/webhook/zentao", {
         method: "POST",

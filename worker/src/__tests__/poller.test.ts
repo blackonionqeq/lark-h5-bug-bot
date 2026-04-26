@@ -2,6 +2,10 @@ import { describe, it, expect, afterEach, spyOn } from "bun:test";
 import { createCloudTaskApi } from "../poller";
 import { makeAnalysisTask } from "../test-fixtures";
 
+function mockFetch(implementation: (...args: Parameters<typeof fetch>) => ReturnType<typeof fetch>) {
+  return spyOn(globalThis, "fetch").mockImplementation(implementation as unknown as typeof fetch);
+}
+
 describe("createCloudTaskApi", () => {
   let fetchSpy: ReturnType<typeof spyOn>;
 
@@ -12,7 +16,7 @@ describe("createCloudTaskApi", () => {
   describe("fetchPending", () => {
     it("returns task when server returns a task", async () => {
       const task = makeAnalysisTask({ taskId: "t1" });
-      fetchSpy = spyOn(globalThis, "fetch").mockImplementation(() =>
+      fetchSpy = mockFetch(() =>
         Promise.resolve(new Response(JSON.stringify({ task })))
       );
 
@@ -25,7 +29,7 @@ describe("createCloudTaskApi", () => {
     });
 
     it("returns null when server returns null task", async () => {
-      fetchSpy = spyOn(globalThis, "fetch").mockImplementation(() =>
+      fetchSpy = mockFetch(() =>
         Promise.resolve(new Response(JSON.stringify({ task: null })))
       );
 
@@ -36,7 +40,7 @@ describe("createCloudTaskApi", () => {
     });
 
     it("returns null on non-ok response", async () => {
-      fetchSpy = spyOn(globalThis, "fetch").mockImplementation(() =>
+      fetchSpy = mockFetch(() =>
         Promise.resolve(new Response("", { status: 500 }))
       );
 
@@ -47,7 +51,7 @@ describe("createCloudTaskApi", () => {
     });
 
     it("sends Bearer auth header", async () => {
-      fetchSpy = spyOn(globalThis, "fetch").mockImplementation(() =>
+      fetchSpy = mockFetch(() =>
         Promise.resolve(new Response(JSON.stringify({ task: null })))
       );
 
@@ -61,7 +65,7 @@ describe("createCloudTaskApi", () => {
 
   describe("submitResult", () => {
     it("POSTs patch to the result endpoint", async () => {
-      fetchSpy = spyOn(globalThis, "fetch").mockImplementation(() =>
+      fetchSpy = mockFetch(() =>
         Promise.resolve(new Response("{}"))
       );
 
@@ -78,7 +82,7 @@ describe("createCloudTaskApi", () => {
     });
 
     it("does not throw on non-ok response", async () => {
-      fetchSpy = spyOn(globalThis, "fetch").mockImplementation(() =>
+      fetchSpy = mockFetch(() =>
         Promise.resolve(new Response("", { status: 500 }))
       );
 

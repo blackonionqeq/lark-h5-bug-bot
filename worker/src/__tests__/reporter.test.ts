@@ -2,6 +2,10 @@ import { describe, it, expect, afterEach, spyOn } from "bun:test";
 import { reportToCallback } from "../reporter";
 import { makeAnalysisTask, makeTriageResult, makeAnalysisResult } from "../test-fixtures";
 
+function mockFetch(implementation: (...args: Parameters<typeof fetch>) => ReturnType<typeof fetch>) {
+  return spyOn(globalThis, "fetch").mockImplementation(implementation as unknown as typeof fetch);
+}
+
 describe("reportToCallback", () => {
   let fetchSpy: ReturnType<typeof spyOn>;
 
@@ -10,7 +14,7 @@ describe("reportToCallback", () => {
   });
 
   it("POSTs analysis result to cloud callback endpoint", async () => {
-    fetchSpy = spyOn(globalThis, "fetch").mockImplementation(() =>
+    fetchSpy = mockFetch(() =>
       Promise.resolve(new Response(JSON.stringify({ success: true })))
     );
 
@@ -37,7 +41,7 @@ describe("reportToCallback", () => {
   });
 
   it("does not throw on non-ok response", async () => {
-    fetchSpy = spyOn(globalThis, "fetch").mockImplementation(() =>
+    fetchSpy = mockFetch(() =>
       Promise.resolve(new Response("", { status: 500 }))
     );
 

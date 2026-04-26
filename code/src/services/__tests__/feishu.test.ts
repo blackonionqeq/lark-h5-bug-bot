@@ -2,6 +2,10 @@ import { describe, it, expect, afterEach, spyOn } from "bun:test";
 import { sendMessageToChat } from "../feishu";
 import { makeAppConfig } from "../../test-fixtures";
 
+function mockFetch(implementation: (...args: Parameters<typeof fetch>) => ReturnType<typeof fetch>) {
+  return spyOn(globalThis, "fetch").mockImplementation(implementation as unknown as typeof fetch);
+}
+
 describe("sendMessageToChat", () => {
   let fetchSpy: ReturnType<typeof spyOn>;
 
@@ -10,7 +14,7 @@ describe("sendMessageToChat", () => {
   });
 
   it("calls token endpoint and message endpoint in sequence", async () => {
-    fetchSpy = spyOn(globalThis, "fetch").mockImplementation((url: string | URL | Request, _init?: RequestInit): Promise<Response> => {
+    fetchSpy = mockFetch((url: string | URL | Request, _init?: RequestInit): Promise<Response> => {
       if (typeof url === "string" && url.includes("tenant_access_token")) {
         return Promise.resolve(new Response(JSON.stringify({ code: 0, msg: "ok", tenant_access_token: "fake-token" })));
       }
@@ -29,7 +33,7 @@ describe("sendMessageToChat", () => {
   });
 
   it("throws when token response has non-zero code", async () => {
-    fetchSpy = spyOn(globalThis, "fetch").mockImplementation(() =>
+    fetchSpy = mockFetch(() =>
       Promise.resolve(new Response(JSON.stringify({ code: 999, msg: "invalid app" })))
     );
 
@@ -38,7 +42,7 @@ describe("sendMessageToChat", () => {
   });
 
   it("throws when token HTTP response is not ok", async () => {
-    fetchSpy = spyOn(globalThis, "fetch").mockImplementation(() =>
+    fetchSpy = mockFetch(() =>
       Promise.resolve(new Response("", { status: 500 }))
     );
 
@@ -47,7 +51,7 @@ describe("sendMessageToChat", () => {
   });
 
   it("throws when message send response has non-zero code", async () => {
-    fetchSpy = spyOn(globalThis, "fetch").mockImplementation((url: string | URL | Request, _init?: RequestInit): Promise<Response> => {
+    fetchSpy = mockFetch((url: string | URL | Request, _init?: RequestInit): Promise<Response> => {
       if (typeof url === "string" && url.includes("tenant_access_token")) {
         return Promise.resolve(new Response(JSON.stringify({ code: 0, msg: "ok", tenant_access_token: "fake-token" })));
       }
@@ -59,7 +63,7 @@ describe("sendMessageToChat", () => {
   });
 
   it("throws when message HTTP response is not ok", async () => {
-    fetchSpy = spyOn(globalThis, "fetch").mockImplementation((url: string | URL | Request, _init?: RequestInit): Promise<Response> => {
+    fetchSpy = mockFetch((url: string | URL | Request, _init?: RequestInit): Promise<Response> => {
       if (typeof url === "string" && url.includes("tenant_access_token")) {
         return Promise.resolve(new Response(JSON.stringify({ code: 0, msg: "ok", tenant_access_token: "fake-token" })));
       }

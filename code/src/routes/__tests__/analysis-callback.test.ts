@@ -1,20 +1,23 @@
 import { describe, it, expect, beforeEach, afterEach, spyOn } from "bun:test";
-import { Elysia } from "elysia";
 import { createAnalysisCallbackRouter } from "../analysis-callback";
 import { makeAppConfig } from "../../test-fixtures";
 
+function mockFetch(implementation: (...args: Parameters<typeof fetch>) => ReturnType<typeof fetch>) {
+  return spyOn(globalThis, "fetch").mockImplementation(implementation as unknown as typeof fetch);
+}
+
 describe("POST /callback/analysis-result", () => {
   let fetchSpy: ReturnType<typeof spyOn>;
-  let app: Elysia;
+  let app: ReturnType<typeof createAnalysisCallbackRouter>;
 
   beforeEach(() => {
-    fetchSpy = spyOn(globalThis, "fetch").mockImplementation(() =>
+    fetchSpy = mockFetch(() =>
       Promise.resolve(
         new Response(JSON.stringify({ code: 0, msg: "ok", tenant_access_token: "fake-token", data: {} }))
       )
     );
     const config = makeAppConfig();
-    app = new Elysia().use(createAnalysisCallbackRouter(config));
+    app = createAnalysisCallbackRouter(config);
   });
 
   afterEach(() => {
@@ -49,7 +52,7 @@ describe("POST /callback/analysis-result", () => {
     fetchSpy?.mockRestore();
     fetchSpy = spyOn(globalThis, "fetch").mockRejectedValue(new Error("Network error"));
 
-    const app2 = new Elysia().use(createAnalysisCallbackRouter(makeAppConfig()));
+    const app2 = createAnalysisCallbackRouter(makeAppConfig());
     const res = await app2.handle(
       new Request("http://localhost/callback/analysis-result", {
         method: "POST",
