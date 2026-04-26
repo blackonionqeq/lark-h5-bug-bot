@@ -1,0 +1,14 @@
+{
+  "name": "bug-analysis-worker",
+  "version": "1.0.0",
+  "packageManager": "pnpm@10.18.1",
+  "type": "module",
+  "scripts": {
+    "start": "bun --env-file ../.env src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "bun-types": "^1.2.15",
+    "typescript": "^5.9.3"
+  }
+}

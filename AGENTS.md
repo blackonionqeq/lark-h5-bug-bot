@@ -4,104 +4,123 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Working directory
 
-- Most application code lives under `code/`.
+- Cloud service code lives under `code/`.
+- Worker code lives under `worker/`.
 - The runtime expects the env file at the repository root: `.env`.
-- Run app commands from `code/`, not the repository root.
+- Run cloud commands from `code/`, worker commands from `worker/`.
 
 ## Development commands
 
-From `code/`:
+### Cloud (from `code/`):
 
 ```bash
 pnpm install
-pnpm dev
-pnpm start
-pnpm typecheck
+pnpm dev          # Bun watch mode with ../.env
+pnpm start        # Elysia server with ../.env
+pnpm typecheck    # tsc --noEmit
 ```
 
-What they do:
+### Worker (from `worker/`):
 
-- `pnpm dev` — starts Bun in watch mode with `../.env` loaded.
-- `pnpm start` — starts the Elysia server with `../.env` loaded.
-- `pnpm typecheck` — runs `tsc --noEmit`.
+```bash
+pnpm install
+pnpm start        # starts poll loop with ../.env
+pnpm typecheck    # tsc --noEmit
+```
 
-There is currently no test runner configured in `code/package.json`. If tests are added later, update this file with the exact command.
+There is currently no test runner configured. If tests are added later, update this file.
 
 ## Required environment variables
 
-The app fails fast at startup if these are missing:
+### Cloud (fails fast if missing):
 
 - `APP_ID`
 - `APP_SECRET`
 - `CHAT_ID`
-- `PORT` is optional and defaults to `3000`
+- `PORT` — optional, defaults to `3000`
+- `AGENT_API_TOKEN` — optional, enables Bearer auth on `/agent/*` routes
 
-Config loading is centralized in `code/src/config.ts`.
+### Worker (fails fast if missing):
+
+- `CLOUD_URL` — cloud service base URL
+- `AGENT_API_TOKEN` — must match cloud config
+- `REPO_PATH` — path to the frontend project to analyze
+
+Optional worker vars: `LOG_DIR`, `POLL_INTERVAL_MS`, `TIMEOUT_SECONDS`, `MAX_TURNS`, `CLAUDE_MODEL`.
+
+Config loading is centralized in `code/src/config.ts` (cloud) and `worker/src/config.ts` (worker).
 
 ## High-level architecture
 
-This is a small Bun + TypeScript + Elysia service that accepts inbound events and forwards them to a Feishu group chat.
+Two components:
 
-Current HTTP entrypoints:
+1. **Cloud service** (Bun + Elysia): accepts inbound events, forwards them to Feishu, and manages a task queue for the worker.
+2. **Local worker** (Bun): polls the cloud for pending analysis tasks, triages bugs via rules, runs Claude Code CLI against a frontend repo, and reports results back.
 
-- `POST /webhook/zentao`
-- `POST /callback/analysis-result`
+### Cloud HTTP entrypoints:
 
-The request flow is:
+- `POST /webhook/zentao` — receive Zentao webhook
+- `POST /callback/analysis-result` — receive analysis results (from worker)
+- `GET  /agent/tasks/pending` — worker pulls and claims a task (Bearer auth)
+- `POST /agent/tasks/:id/claim` — explicit claim (Bearer auth)
+- `POST /agent/tasks/:id/result` — submit intermediate/final status (Bearer auth)
+
+### Cloud request flow:
 
 1. `code/src/index.ts` creates the Elysia app and mounts route factories.
-2. Route modules in `code/src/routes/` accept raw request bodies and convert them into a shared internal event shape.
-3. `code/src/services/event-processor.ts` creates `AppEvent` objects, assigns `traceId`, optionally triggers local processing for Zentao events, formats the outgoing message, and sends it to Feishu.
-4. `code/src/services/feishu.ts` handles Feishu API integration in two steps:
-   - fetch tenant access token
-   - send a chat message to the configured `chat_id`
-5. `code/src/utils/format-message.ts` controls the final text content sent to Feishu.
+2. Route modules in `code/src/routes/` normalize payloads into `AppEvent`.
+3. `code/src/services/event-processor.ts` creates events, enqueues analysis tasks for Zentao events, formats messages, and sends to Feishu.
+4. `code/src/services/task-store.ts` is the in-memory task queue (Phase 1; designed for SQLite replacement in Phase 2).
+5. `code/src/services/local-task.ts` creates `AnalysisTask` objects and enqueues them.
+6. `code/src/routes/agent-tasks.ts` exposes the task queue to the worker via REST API with Bearer auth.
+
+### Worker flow:
+
+1. `worker/src/index.ts` — main poll loop on a timer.
+2. `worker/src/poller.ts` — HTTP client for the cloud task API.
+3. `worker/src/triage.ts` — rule-based frontend/non-frontend classification. Defaults to frontend when uncertain.
+4. `worker/src/runner.ts` — spawns `claude -p` with `--output-format stream-json`, captures JSONL logs, extracts the `result` event.
+5. `worker/src/reporter.ts` — POSTs analysis results to `/callback/analysis-result`.
 
 ## Event model
 
 Shared event and payload types live in `code/src/types.ts`.
 
-Important design choice: both routes normalize incoming payloads into a common `AppEvent` structure with:
+Both routes normalize incoming payloads into a common `AppEvent` structure with: `source`, `type`, `payload`, `meta`, `traceId`, `timestamp`.
 
-- `source`
-- `type`
-- `payload`
-- `meta`
-- `traceId`
-- `timestamp`
+When adding a new event source, keep this normalization pattern.
 
-When adding a new event source, keep this normalization pattern instead of putting source-specific logic directly into `index.ts`.
+## Data model
 
-## Route responsibilities
+`code/src/types.ts` defines:
 
-- `code/src/routes/zentao.ts` handles Zentao webhook input and derives `issueId` from `id`, `bugId`, or `issueId`.
-- `code/src/routes/analysis-callback.ts` handles async analysis callback input and preserves upstream `taskId`, `issueId`, and `traceId` in event metadata.
+- `AnalysisTask` — task lifecycle: `queued → claimed → running → completed/failed`
+- `TriageResult` — classification output: `frontend | non-frontend`, with source and matched rules
+- `AnalysisResult` — analysis conclusion: `suspected | resolved | inconclusive | skipped | failed`
+- `TaskStore` — interface for task queue (current impl: in-memory Map)
 
-## Local processing hook
-
-`code/src/services/local-task.ts` is currently only a stub invoked for `zentao.webhook.received`. It is the intended extension point for local side effects or async job triggering before Feishu delivery.
+Task status and analysis conclusion are two independent dimensions.
 
 ## Feishu integration notes
 
-- The service uses Feishu app credentials, not a custom webhook bot.
-- Message sending is plain text today.
-- `code/src/services/feishu.ts` logs the request URL and payload before sending; be careful when changing logging around secrets or tokens.
+- Uses Feishu app credentials, not a custom webhook bot.
+- Message sending is plain text.
+- `code/src/services/feishu.ts` logs request URL and payload; be careful with secrets/tokens.
 
 ## TypeScript/runtime setup
 
-- Runtime is Bun.
-- TS config is in `code/tsconfig.json`.
-- `moduleResolution` is `bundler` and Bun types are enabled.
-- Source files included by TypeScript are `code/src/**/*.ts`.
+- Runtime is Bun (both cloud and worker).
+- TS configs: `code/tsconfig.json` and `worker/tsconfig.json`.
+- `moduleResolution` is `bundler`, Bun types enabled.
+- Worker imports shared types from `../../code/src/types` via relative paths.
 
-## Deployment assumptions from the repo
-
-The repository is structured so production deployments can place:
+## Deployment assumptions
 
 ```bash
 /opt/lark-h5-bug-bot/
 ├── .env
-└── code/
+├── code/       # cloud service
+└── worker/     # can be on a different machine
 ```
 
-That matches the existing Bun commands, which load env from `../.env`.
+Worker only makes outbound HTTPS requests to the cloud. No inbound connections or tunneling needed.

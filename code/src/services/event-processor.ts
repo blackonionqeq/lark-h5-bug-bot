@@ -1,5 +1,5 @@
 import { sendMessageToChat } from "./feishu";
-import { callLocalMethod } from "./local-task";
+import { enqueueTask } from "./local-task";
 import { formatMessage } from "../utils/format-message";
 import type { AppConfig, AppEvent, EventMeta, EventSource, EventType } from "../types";
 
@@ -33,7 +33,7 @@ export async function handleEvent(event: AppEvent, config: AppConfig) {
   });
 
   if (event.type === "zentao.webhook.received") {
-    callLocalMethod(event);
+    enqueueTask(event);
   }
 
   const messageContent = formatMessage(event);

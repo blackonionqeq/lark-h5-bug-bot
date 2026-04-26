@@ -1,5 +1,6 @@
 # dependencies
 code/node_modules/
+worker/node_modules/
 
 # environment
 .env
@@ -33,3 +34,6 @@ code/coverage/
 .idea/
 
 tempnpm-cache
+
+#claude
+.claude/settings.local.json

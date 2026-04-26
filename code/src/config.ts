@@ -21,5 +21,6 @@ export function getConfig(): AppConfig {
     appSecret: requireEnv("APP_SECRET"),
     chatID: requireEnv("CHAT_ID"),
     port,
+    agentApiToken: Bun.env.AGENT_API_TOKEN,
   };
 }

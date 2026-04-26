@@ -1,0 +1,31 @@
+function requireEnv(name: string): string {
+  const value = Bun.env[name];
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+  return value;
+}
+
+export interface WorkerConfig {
+  cloudUrl: string;
+  agentApiToken: string;
+  repoPath: string;
+  logDir: string;
+  pollIntervalMs: number;
+  maxTurns: number;
+  timeoutSeconds: number;
+  claudeModel: string;
+}
+
+export function getConfig(): WorkerConfig {
+  return {
+    cloudUrl: requireEnv("CLOUD_URL"),
+    agentApiToken: requireEnv("AGENT_API_TOKEN"),
+    repoPath: requireEnv("REPO_PATH"),
+    logDir: Bun.env.LOG_DIR || "./logs",
+    pollIntervalMs: Number(Bun.env.POLL_INTERVAL_MS) || 5000,
+    maxTurns: Number(Bun.env.MAX_TURNS) || 20,
+    timeoutSeconds: Number(Bun.env.TIMEOUT_SECONDS) || 300,
+    claudeModel: Bun.env.CLAUDE_MODEL || "sonnet",
+  };
+}
