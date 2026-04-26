@@ -17,7 +17,21 @@ export interface WorkerConfig {
   claudeModel: string;
 }
 
-export function getConfig(): WorkerConfig {
+export function getConfig(overrides?: Partial<WorkerConfig>): WorkerConfig {
+  if (overrides) {
+    return {
+      cloudUrl: "",
+      agentApiToken: "",
+      repoPath: "",
+      logDir: "./logs",
+      pollIntervalMs: 5000,
+      maxTurns: 20,
+      timeoutSeconds: 300,
+      claudeModel: "sonnet",
+      ...overrides,
+    };
+  }
+
   return {
     cloudUrl: requireEnv("CLOUD_URL"),
     agentApiToken: requireEnv("AGENT_API_TOKEN"),

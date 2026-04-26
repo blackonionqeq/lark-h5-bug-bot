@@ -10,7 +10,7 @@ async function buildPrompt(title: string, description: string): Promise<string> 
   return template.replace("{title}", title).replace("{description}", description);
 }
 
-function extractResult(jsonl: string): AnalysisResult {
+export function extractResult(jsonl: string): AnalysisResult {
   const lines = jsonl.trim().split("\n");
   for (let i = lines.length - 1; i >= 0; i--) {
     try {

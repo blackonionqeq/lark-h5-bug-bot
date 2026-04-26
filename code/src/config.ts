@@ -8,7 +8,17 @@ function requireEnv(name: string): string {
   return value;
 }
 
-export function getConfig(): AppConfig {
+export function getConfig(overrides?: Partial<AppConfig>): AppConfig {
+  if (overrides) {
+    return {
+      appID: "",
+      appSecret: "",
+      chatID: "",
+      port: 3000,
+      ...overrides,
+    };
+  }
+
   const portValue = Bun.env.PORT;
   const port = portValue ? Number(portValue) : 3000;
 

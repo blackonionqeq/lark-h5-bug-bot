@@ -18,6 +18,7 @@ pnpm install
 pnpm dev          # Bun watch mode with ../.env
 pnpm start        # Elysia server with ../.env
 pnpm typecheck    # tsc --noEmit
+pnpm test         # Bun test runner (no .env needed)
 ```
 
 ### Worker (from `worker/`):
@@ -26,9 +27,10 @@ pnpm typecheck    # tsc --noEmit
 pnpm install
 pnpm start        # starts poll loop with ../.env
 pnpm typecheck    # tsc --noEmit
+pnpm test         # Bun test runner (no .env needed)
 ```
 
-There is currently no test runner configured. If tests are added later, update this file.
+Tests use Bun's built-in `bun:test` runner with hardcoded fixture data — no `.env` file required. See `code/TESTING.md` and `worker/TESTING.md` for details.
 
 ## Required environment variables
 

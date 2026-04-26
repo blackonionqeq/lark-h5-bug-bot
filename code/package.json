@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "bun --watch --env-file ../.env src/index.ts",
     "start": "bun --env-file ../.env src/index.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
   },
   "dependencies": {
     "bun-types": "^1.2.15",
