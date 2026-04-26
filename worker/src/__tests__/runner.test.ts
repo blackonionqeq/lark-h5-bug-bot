@@ -1,11 +1,33 @@
-import { describe, it, expect, afterEach, mock, spyOn } from "bun:test";
-import { extractResult } from "../runner";
-import type { AnalysisResult } from "../../../code/src/types";
+import { mkdtemp, readFile, rm, access } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, it, expect, afterEach, mock } from "bun:test";
+import { extractResult, runClaudeAnalysis } from "../runner";
+import { makeWorkerConfig } from "../test-fixtures";
+
+function streamFromText(text: string): ReadableStream<Uint8Array> {
+  return new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(text));
+      controller.close();
+    },
+  });
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function resultEvent(json: string): string {
+  return JSON.stringify({ type: "result", result: json }) + "\n";
+}
 
 describe("extractResult", () => {
-  const resultEvent = (json: string) =>
-    JSON.stringify({ type: "result", result: json }) + "\n";
-
   it("extracts suspected result from JSONL", () => {
     const jsonl = resultEvent(JSON.stringify({
       status: "suspected",
@@ -103,5 +125,141 @@ describe("extractResult", () => {
   it("returns failed for empty input", () => {
     const result = extractResult("");
     expect(result.status).toBe("failed");
+  });
+});
+
+describe("runClaudeAnalysis", () => {
+  const createdLogDirs: string[] = [];
+
+  afterEach(async () => {
+    await Promise.all(createdLogDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+  });
+
+  async function createLogDir(): Promise<string> {
+    const logDir = await mkdtemp(join(tmpdir(), "runner-test-"));
+    createdLogDirs.push(logDir);
+    return logDir;
+  }
+
+  it("writes log and returns parsed result when claude exits successfully", async () => {
+    const taskId = `runner-success-${crypto.randomUUID()}`;
+    const logDir = await createLogDir();
+    const config = makeWorkerConfig({ logDir, timeoutSeconds: 5 });
+    const timeoutHandle = { id: "timeout-1" };
+    const clearTimeoutFn = mock(() => {});
+
+    const { result, logPath } = await runClaudeAnalysis(
+      "白屏问题",
+      "打开页面后白屏",
+      taskId,
+      config,
+      {
+        spawn: () => ({
+          exited: Promise.resolve(0),
+          stdout: streamFromText(resultEvent(JSON.stringify({ status: "resolved", summary: "done", reason: "fixed", files: ["src/a.ts"] }))),
+          stderr: streamFromText(""),
+          kill: mock(() => {}),
+        }),
+        setTimeoutFn: () => timeoutHandle,
+        clearTimeoutFn,
+      }
+    );
+
+    expect(result.status).toBe("resolved");
+    expect(result.summary).toBe("done");
+    expect(logPath).toBe(join(logDir, `${taskId}.jsonl`));
+    expect(await readFile(logPath, "utf-8")).toContain('"type":"result"');
+    expect(clearTimeoutFn).toHaveBeenCalledWith(timeoutHandle);
+    expect(await pathExists(join(tmpdir(), `${taskId}-prompt.txt`))).toBe(false);
+  });
+
+  it("returns failed result when claude exits with non-zero code", async () => {
+    const taskId = `runner-exit-${crypto.randomUUID()}`;
+    const logDir = await createLogDir();
+    const config = makeWorkerConfig({ logDir, timeoutSeconds: 5 });
+
+    const { result, logPath } = await runClaudeAnalysis(
+      "接口报错",
+      "执行过程中异常退出",
+      taskId,
+      config,
+      {
+        spawn: () => ({
+          exited: Promise.resolve(2),
+          stdout: streamFromText("partial output"),
+          stderr: streamFromText("fatal error"),
+          kill: mock(() => {}),
+        }),
+        setTimeoutFn: () => ({ id: "timeout-2" }),
+        clearTimeoutFn: mock(() => {}),
+      }
+    );
+
+    expect(result.status).toBe("failed");
+    expect(result.summary).toContain("2");
+    expect(result.reason).toContain("fatal error");
+    expect(await readFile(logPath, "utf-8")).toBe("partial output");
+  });
+
+  it("returns stderr content when claude exits with error and stdout is empty", async () => {
+    const taskId = `runner-stderr-only-${crypto.randomUUID()}`;
+    const logDir = await createLogDir();
+    const config = makeWorkerConfig({ logDir, timeoutSeconds: 5 });
+
+    const { result, logPath } = await runClaudeAnalysis(
+      "命令异常",
+      "CLI 没有标准输出",
+      taskId,
+      config,
+      {
+        spawn: () => ({
+          exited: Promise.resolve(1),
+          stdout: streamFromText(""),
+          stderr: streamFromText("only stderr output"),
+          kill: mock(() => {}),
+        }),
+        setTimeoutFn: () => ({ id: "timeout-2b" }),
+        clearTimeoutFn: mock(() => {}),
+      }
+    );
+
+    expect(result.status).toBe("failed");
+    expect(result.summary).toContain("1");
+    expect(result.reason).toBe("only stderr output");
+    expect(await readFile(logPath, "utf-8")).toBe("");
+  });
+
+  it("kills the process and returns timeout result when timer fires", async () => {
+    const taskId = `runner-timeout-${crypto.randomUUID()}`;
+    const logDir = await createLogDir();
+    const config = makeWorkerConfig({ logDir, timeoutSeconds: 1 });
+    const kill = mock(() => {});
+    const clearTimeoutFn = mock(() => {});
+    const timeoutHandle = { id: "timeout-3" };
+
+    const { result } = await runClaudeAnalysis(
+      "超时问题",
+      "分析执行超时",
+      taskId,
+      config,
+      {
+        spawn: () => ({
+          exited: Promise.resolve(null),
+          stdout: streamFromText(""),
+          stderr: streamFromText(""),
+          kill,
+        }),
+        setTimeoutFn: (callback) => {
+          callback();
+          return timeoutHandle;
+        },
+        clearTimeoutFn,
+      }
+    );
+
+    expect(kill).toHaveBeenCalledTimes(1);
+    expect(clearTimeoutFn).toHaveBeenCalledWith(timeoutHandle);
+    expect(result.status).toBe("failed");
+    expect(result.summary).toBe("分析超时");
   });
 });

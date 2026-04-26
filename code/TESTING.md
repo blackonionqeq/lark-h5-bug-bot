@@ -64,6 +64,18 @@ Each factory returns a complete, valid object with sensible defaults. All fields
 const task = makeAnalysisTask({ status: "claimed" });
 ```
 
+## Stateful store tests
+
+`task-store.ts` now exports `createTaskStore()` for isolated tests. Prefer creating a fresh store per test instead of reusing the process-wide singleton:
+
+```ts
+import { createTaskStore } from "../services/task-store";
+
+let taskStore = createTaskStore();
+```
+
+Keep the exported `taskStore` singleton for production wiring.
+
 ## Mocking external calls
 
 Use `spyOn` on `globalThis.fetch` for services that call external APIs (feishu, poller, reporter):

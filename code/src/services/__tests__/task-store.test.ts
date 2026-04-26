@@ -1,14 +1,13 @@
 import { describe, it, expect, beforeEach } from "bun:test";
-import { taskStore } from "../task-store";
+import { createTaskStore } from "../task-store";
+import type { TaskStore } from "../../types";
 import { makeAnalysisTask } from "../../test-fixtures";
 
 describe("MemoryTaskStore", () => {
+  let taskStore: TaskStore;
+
   beforeEach(() => {
-    // Clear the singleton store between tests by dequeuing everything
-    let task = taskStore.claim();
-    while (task) {
-      task = taskStore.claim();
-    }
+    taskStore = createTaskStore();
   });
 
   describe("enqueue", () => {

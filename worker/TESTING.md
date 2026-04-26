@@ -68,15 +68,28 @@ spyOn(globalThis, "fetch").mockImplementation(() =>
 
 ### Claude CLI (runner)
 
-The runner spawns `claude` via `Bun.spawn`. Wrap the spawn call or mock `Bun.spawn`:
+`runClaudeAnalysis()` accepts an optional `deps` argument so tests can stub the process boundary without replacing filesystem behavior globally. Prefer overriding `spawn` and timer functions there:
 
 ```ts
-import { spyOn } from "bun:test";
+import { mock } from "bun:test";
+import { runClaudeAnalysis } from "../src/runner";
+import { makeWorkerConfig } from "../src/test-fixtures";
 
-spyOn(Bun, "spawn").mockImplementation(() => ({
-  exited: Promise.resolve(0),
-  stdout: new ReadableStream({ /* ... */ }),
-  stderr: new ReadableStream({ /* ... */ }),
-  kill: () => {},
-}));
+await runClaudeAnalysis("title", "desc", "task-1", makeWorkerConfig(), {
+  spawn: () => ({
+    exited: Promise.resolve(0),
+    stdout: new ReadableStream({ /* ... */ }),
+    stderr: new ReadableStream({ /* ... */ }),
+    kill: mock(() => {}),
+  }),
+  setTimeoutFn: () => ({ id: "timeout-1" }),
+  clearTimeoutFn: mock(() => {}),
+});
 ```
+
+Current runner tests cover:
+
+- successful execution with parsed JSONL result and log write
+- non-zero exit with stderr capture
+- non-zero exit with stderr-only output
+- timeout-triggered process kill

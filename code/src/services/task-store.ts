@@ -34,4 +34,8 @@ class MemoryTaskStore implements TaskStore {
   }
 }
 
-export const taskStore: TaskStore = new MemoryTaskStore();
+export function createTaskStore(): TaskStore {
+  return new MemoryTaskStore();
+}
+
+export const taskStore: TaskStore = createTaskStore();

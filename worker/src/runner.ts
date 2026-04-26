@@ -1,11 +1,43 @@
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { WorkerConfig } from "./config";
 import type { AnalysisResult } from "../../code/src/types";
 
+type SpawnOptions = {
+  cwd: string;
+  stdout: "pipe";
+  stderr: "pipe";
+};
+
+type SpawnedProcess = {
+  exited: Promise<number | null>;
+  stdout: ReadableStream<Uint8Array> | null;
+  stderr: ReadableStream<Uint8Array> | null;
+  kill(): void;
+};
+
+export interface RunnerDeps {
+  spawn(command: string[], options: SpawnOptions): SpawnedProcess;
+  setTimeoutFn(callback: () => void, ms: number): unknown;
+  clearTimeoutFn(timeoutHandle: unknown): void;
+}
+
+const defaultRunnerDeps: RunnerDeps = {
+  spawn(command, options) {
+    return Bun.spawn(command, options);
+  },
+  setTimeoutFn(callback, ms) {
+    return setTimeout(callback, ms);
+  },
+  clearTimeoutFn(timeoutHandle) {
+    clearTimeout(timeoutHandle as ReturnType<typeof setTimeout>);
+  },
+};
+
 async function buildPrompt(title: string, description: string): Promise<string> {
-  const templatePath = new URL("../prompts/analyze-bug.txt", import.meta.url).pathname;
+  const templatePath = fileURLToPath(new URL("../prompts/analyze-bug.txt", import.meta.url));
   const template = await readFile(templatePath, "utf-8");
   return template.replace("{title}", title).replace("{description}", description);
 }
@@ -41,8 +73,14 @@ export async function runClaudeAnalysis(
   title: string,
   description: string,
   taskId: string,
-  config: WorkerConfig
+  config: WorkerConfig,
+  deps?: Partial<RunnerDeps>
 ): Promise<{ result: AnalysisResult; logPath: string }> {
+  const runnerDeps: RunnerDeps = {
+    ...defaultRunnerDeps,
+    ...deps,
+  };
+
   const prompt = await buildPrompt(title, description);
 
   // Write prompt to temp file
@@ -60,7 +98,7 @@ export async function runClaudeAnalysis(
   console.log(`[runner] 工作目录: ${config.repoPath}`);
   console.log(`[runner] 日志文件: ${logPath}`);
 
-  const proc = Bun.spawn(
+  const proc = runnerDeps.spawn(
     ["claude", "-p", promptContent, "--output-format", "stream-json", "--max-turns", String(config.maxTurns), "--model", config.claudeModel],
     {
       cwd: config.repoPath,
@@ -69,16 +107,16 @@ export async function runClaudeAnalysis(
     }
   );
 
-  const timeout = setTimeout(() => {
+  const timeout = runnerDeps.setTimeoutFn(() => {
     console.log(`[runner] 分析超时 (${config.timeoutSeconds}s), 正在终止进程`);
     proc.kill();
   }, config.timeoutSeconds * 1000);
 
   const exitCode = await proc.exited;
-  clearTimeout(timeout);
+  runnerDeps.clearTimeoutFn(timeout);
 
-  const stdout = await new Response(proc.stdout).text();
-  const stderr = await new Response(proc.stderr).text();
+  const stdout = proc.stdout ? await new Response(proc.stdout).text() : "";
+  const stderr = proc.stderr ? await new Response(proc.stderr).text() : "";
 
   // Write output to log file
   await writeFile(logPath, stdout, "utf-8");
