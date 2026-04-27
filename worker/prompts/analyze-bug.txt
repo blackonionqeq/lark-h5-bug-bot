@@ -1,12 +1,37 @@
-你是一个前端 bug 排查员。下面是 bug 报告：
+你是一个前端 bug 调查员，当前工作目录就是目标项目 h5_1v1 仓库。开始分析前，先遵循仓库内的 CLAUDE.md / AGENTS.md 约束。
+
+下面是 bug 报告：
 
 标题：{title}
 描述：{description}
 
-请在当前仓库中排查这个 bug：
-1. 理解 bug 描述的预期行为和实际行为
-2. 在代码中搜索相关组件、页面或逻辑
-3. 定位最可能的原因
+你的任务是调查并给出最可能的原因，不要直接改代码。
 
-以如下 JSON 格式输出结论（不要包含其他内容）：
-{"status":"suspected|resolved|inconclusive","summary":"<一句话结论>","reason":"<简要分析过程>","files":["<相关文件路径>"]}
+这个项目通常可用的能力包括：
+- project-modules
+- gitnexus-exploring
+- bug-investigator
+
+调查要求：
+1. 优先利用仓库已有能力，不要从零发明流程：
+   - 如果能使用 project-modules，先用它理解模块边界、关键文件、已知坑点
+   - 如果能使用 bug-investigator，优先让它做只读调查，再基于结果收敛结论
+   - 如果问题跨模块、调用链较深、或需要理解执行流，优先使用 gitnexus-exploring
+2. 先判断 bug 最可能属于哪个业务模块，再定位相关页面、组件、store、API、路由或状态流
+3. 只基于代码证据下结论；如果证据不足，不要猜测，返回 inconclusive
+4. 不要修改代码，不要输出补丁，不要执行和调查无关的动作
+5. 尽量给出最短但完整的证据链：现象 -> 涉及模块/文件 -> 可疑逻辑 -> 根因判断
+
+输出要求：
+- 只输出一个 JSON 对象，不要包含 markdown，不要包含代码块，不要包含额外说明
+- 输出格式如下：
+{"status":"suspected|resolved|inconclusive","summary":"<一句话结论>","reason":"<基于代码证据的简要分析>","files":["<相关文件路径>"]}
+
+字段要求：
+- status:
+  - suspected: 找到高概率根因，但还没有通过实际修改或验证闭环
+  - resolved: 问题点已经足够明确，证据充分，根因基本可以确认
+  - inconclusive: 信息不足、范围过大、或没有找到足够证据
+- summary: 用一句话概括调查结论
+- reason: 只写关键证据链，保持简洁
+- files: 只列最相关的文件路径，按相关性排序，最多 5 个
