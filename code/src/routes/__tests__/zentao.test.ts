@@ -7,6 +7,17 @@ function mockFetch(implementation: (...args: Parameters<typeof fetch>) => Return
   return spyOn(globalThis, "fetch").mockImplementation(implementation as unknown as typeof fetch);
 }
 
+const ZENTAO_TEXT = `【🔔 禅道BUG修改提醒】
+🧑‍💻 创建人：张三
+🎬 操作人：李四
+👤 指派人：王五
+📝 BUG标题：页面白屏
+🆔 BUG编号：#80407
+📊 BUG状态：active
+⚡ 优先级：3
+💥 严重程度：3
+🔗 详情链接：http://zentao.example.com/bug-view-80407.html`;
+
 describe("POST /webhook/zentao", () => {
   let fetchSpy: ReturnType<typeof spyOn>;
   let app: ReturnType<typeof createZentaoRouter>;
@@ -32,7 +43,7 @@ describe("POST /webhook/zentao", () => {
     const res = await app.handle(
       new Request("http://localhost/webhook/zentao", {
         method: "POST",
-        body: JSON.stringify({ id: 1, title: "页面白屏", description: "打开首页白屏" }),
+        body: JSON.stringify({ text: ZENTAO_TEXT }),
         headers: { "content-type": "application/json" },
       })
     );
@@ -46,14 +57,28 @@ describe("POST /webhook/zentao", () => {
     await app.handle(
       new Request("http://localhost/webhook/zentao", {
         method: "POST",
-        body: JSON.stringify({ id: 42, title: "test bug", description: "desc" }),
+        body: JSON.stringify({ text: ZENTAO_TEXT }),
         headers: { "content-type": "application/json" },
       })
     );
 
     const task = taskStore.claim();
     expect(task).not.toBeNull();
-    expect(task!.issueId).toBe(42);
+    expect(task!.issueId).toBe("80407");
+  });
+
+  it("returns failure when text is unparseable", async () => {
+    const res = await app.handle(
+      new Request("http://localhost/webhook/zentao", {
+        method: "POST",
+        body: JSON.stringify({}),
+        headers: { "content-type": "application/json" },
+      })
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.success).toBe(false);
   });
 
   it("returns 500 on error by restoring fetch to throw", async () => {
@@ -64,7 +89,7 @@ describe("POST /webhook/zentao", () => {
     const res = await app2.handle(
       new Request("http://localhost/webhook/zentao", {
         method: "POST",
-        body: JSON.stringify({}),
+        body: JSON.stringify({ text: ZENTAO_TEXT }),
         headers: { "content-type": "application/json" },
       })
     );

@@ -1,32 +1,53 @@
 import { describe, it, expect } from "bun:test";
 import { formatMessage } from "../format-message";
 import { makeAppEvent, makeAnalysisCallbackPayload, makeZentaoPayload } from "../../test-fixtures";
+import type { ZentaoParsedFields } from "../../types";
+
+const testParsed: ZentaoParsedFields = {
+  bugId: "100",
+  title: "页面白屏报错",
+  status: "active",
+  priority: "3",
+  severity: "3",
+  creator: "张三",
+  operator: "李四",
+  assignee: "王五",
+  link: "http://zentao.example.com/bug-view-100.html",
+};
 
 describe("formatMessage", () => {
   describe("zentao.webhook.received", () => {
     it("formats a zentao bug notification", () => {
       const event = makeAppEvent({
         type: "zentao.webhook.received",
-        payload: makeZentaoPayload({ title: "登录按钮无响应", issueId: "BUG-200" }),
-        meta: { issueId: "BUG-200" },
+        meta: { issueId: "100" },
       });
 
       const result = formatMessage(event);
-      expect(result).toContain("收到禅道 Bug");
-      expect(result).toContain("登录按钮无响应");
-      expect(result).toContain("BUG-200");
+      expect(result).toContain("禅道 Bug #100");
+      expect(result).toContain("页面白屏报错");
+      expect(result).toContain("active");
     });
 
-    it("includes description truncated to 200 chars", () => {
-      const longDesc = "x".repeat(300);
+    it("falls back when no _parsed field", () => {
       const event = makeAppEvent({
         type: "zentao.webhook.received",
-        payload: makeZentaoPayload({ description: longDesc }),
+        payload: { text: "something" },
+        meta: {},
       });
 
       const result = formatMessage(event);
-      const descPart = result.split("描述: ")[1] ?? "";
-      expect(descPart.length).toBeLessThanOrEqual(201);
+      expect(result).toContain("收到禅道 Bug 通知");
+    });
+
+    it("includes @ mention when userMentions provided", () => {
+      const event = makeAppEvent({
+        type: "zentao.webhook.received",
+        meta: { issueId: "100" },
+      });
+
+      const result = formatMessage(event, { "王五": "ou_abc123" });
+      expect(result).toContain('<at user_id="ou_abc123">王五</at>');
     });
   });
 

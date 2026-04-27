@@ -36,7 +36,7 @@ export async function handleEvent(event: AppEvent, config: AppConfig) {
     enqueueTask(event);
   }
 
-  const messageContent = formatMessage(event);
+  const messageContent = formatMessage(event, config.userMentions);
   const messageResult = await sendMessageToChat(config, messageContent);
 
   return {

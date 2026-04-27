@@ -1,10 +1,10 @@
-import type { AppEvent, AnalysisCallbackPayload } from "../types";
+import type { AppEvent, AnalysisCallbackPayload, ZentaoParsedFields } from "../types";
 
 function stringifyPayload(payload: unknown): string {
   return JSON.stringify(payload, null, 2);
 }
 
-export function formatMessage(event: AppEvent): string {
+export function formatMessage(event: AppEvent, userMentions?: Record<string, string>): string {
   if (event.type === "analysis.result.received") {
     const p = event.payload as AnalysisCallbackPayload;
     const statusEmoji: Record<string, string> = {
@@ -27,13 +27,34 @@ export function formatMessage(event: AppEvent): string {
   }
 
   if (event.type === "zentao.webhook.received") {
-    const p = event.payload as Record<string, unknown>;
-    const lines: string[] = ["收到禅道 Bug"];
-    if (p.title) lines.push(`标题: ${p.title}`);
-    if (event.meta.issueId) lines.push(`ID: ${event.meta.issueId}`);
-    if (p.description) lines.push(`描述: ${String(p.description).slice(0, 200)}`);
-    return lines.join("\n\n");
+    const p = event.payload as Record<string, unknown> & { _parsed?: ZentaoParsedFields };
+    const parsed = p._parsed;
+    if (!parsed) {
+      return `收到禅道 Bug 通知`;
+    }
+
+    const statusEmoji: Record<string, string> = {
+      active: "🔴",
+      resolved: "🟢",
+      closed: "✅",
+    };
+    const emoji = statusEmoji[parsed.status] ?? "🟡";
+
+    const lines: string[] = [];
+    lines.push(`${emoji} 禅道 Bug #${parsed.bugId} — ${parsed.title}`);
+    lines.push(`状态: ${parsed.status} | 优先级: ${parsed.priority} | 严重程度: ${parsed.severity}`);
+    lines.push(`创建人: ${parsed.creator} → 操作人: ${parsed.operator} → 指派人: ${mentionUser(parsed.assignee, userMentions)}`);
+    if (parsed.link) lines.push(`详情: ${parsed.link}`);
+    return lines.join("\n");
   }
 
   return stringifyPayload(event.payload);
+}
+
+function mentionUser(name: string, userMentions?: Record<string, string>): string {
+  const openId = userMentions?.[name];
+  if (openId) {
+    return `<at user_id="${openId}">${name}</at>`;
+  }
+  return name;
 }

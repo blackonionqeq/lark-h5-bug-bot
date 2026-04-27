@@ -26,12 +26,26 @@ export interface AppConfig {
   chatID: string;
   port: number;
   agentApiToken?: string;
+  /** Map of display name → Feishu open_id for @ mentions */
+  userMentions: Record<string, string>;
 }
 
+/** Raw payload from Zentao webhook — contains only a formatted text field */
 export interface ZentaoWebhookPayload extends Record<string, unknown> {
-  id?: string | number;
-  bugId?: string | number;
-  issueId?: string | number;
+  text?: string;
+}
+
+/** Parsed fields extracted from Zentao webhook text */
+export interface ZentaoParsedFields {
+  bugId: string;
+  title: string;
+  status: string;
+  priority: string;
+  severity: string;
+  creator: string;
+  operator: string;
+  assignee: string;
+  link: string;
 }
 
 export interface AnalysisCallbackPayload extends Record<string, unknown> {

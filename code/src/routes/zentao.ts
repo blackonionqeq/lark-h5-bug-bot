@@ -1,5 +1,6 @@
 import { Elysia } from "elysia";
 import { createEvent, handleEvent } from "../services/event-processor";
+import { parseZentaoText } from "../utils/parse-zentao";
 import type { AppConfig, ZentaoWebhookPayload } from "../types";
 
 export function createZentaoRouter(config: AppConfig) {
@@ -8,14 +9,24 @@ export function createZentaoRouter(config: AppConfig) {
 
     try {
       console.log("收到禅道 Webhook 请求");
+      console.log("原始请求体:", JSON.stringify(body, null, 2));
 
       const payload = (body ?? {}) as ZentaoWebhookPayload;
+      const parsed = parseZentaoText(payload);
+
+      if (!parsed) {
+        console.warn("无法解析禅道 webhook text，跳过处理");
+        return { success: false, message: "无法解析禅道 webhook 内容" };
+      }
+
+      console.log("解析结果:", JSON.stringify(parsed, null, 2));
+
       const event = createEvent({
         source: "zentao",
         type: "zentao.webhook.received",
-        payload,
+        payload: { ...payload, _parsed: parsed },
         meta: {
-          issueId: payload.id ?? payload.bugId ?? payload.issueId,
+          issueId: parsed.bugId,
         },
       });
 

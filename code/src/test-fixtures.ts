@@ -5,6 +5,7 @@ import type {
   TriageResult,
   AnalysisResult,
   ZentaoWebhookPayload,
+  ZentaoParsedFields,
   AnalysisCallbackPayload,
 } from "./types";
 
@@ -14,17 +15,14 @@ export function makeAppConfig(overrides?: Partial<AppConfig>): AppConfig {
     appSecret: "test-app-secret",
     chatID: "test-chat-id",
     port: 3000,
+    userMentions: {},
     ...overrides,
   };
 }
 
 export function makeZentaoPayload(overrides?: Partial<ZentaoWebhookPayload>): ZentaoWebhookPayload {
   return {
-    id: 1,
-    bugId: 100,
-    issueId: "BUG-100",
-    title: "页面白屏报错",
-    description: "用户打开首页时页面白屏，控制台报错 TypeError: Cannot read property 'foo' of undefined",
+    text: "【🔔 禅道BUG修改提醒】\n🧑‍💻 创建人：张三\n🎬 操作人：李四\n👤 指派人：王五\n📝 BUG标题：页面白屏报错\n🆔 BUG编号：#100\n📊 BUG状态：active\n⚡ 优先级：3\n💥 严重程度：3\n🔗 详情链接：http://zentao.example.com/bug-view-100.html",
     ...overrides,
   };
 }
@@ -46,12 +44,25 @@ export function makeAnalysisCallbackPayload(
   };
 }
 
+const defaultParsed: ZentaoParsedFields = {
+  bugId: "100",
+  title: "页面白屏报错",
+  status: "active",
+  priority: "3",
+  severity: "3",
+  creator: "张三",
+  operator: "李四",
+  assignee: "王五",
+  link: "http://zentao.example.com/bug-view-100.html",
+};
+
 export function makeAppEvent(overrides?: Partial<AppEvent>): AppEvent {
+  const payload = makeZentaoPayload();
   return {
     source: "zentao",
     type: "zentao.webhook.received",
-    payload: makeZentaoPayload(),
-    meta: { issueId: "BUG-100" },
+    payload: { ...payload, _parsed: defaultParsed },
+    meta: { issueId: "100" },
     traceId: "trace-001",
     timestamp: "2025-01-01T00:00:00.000Z",
     ...overrides,
