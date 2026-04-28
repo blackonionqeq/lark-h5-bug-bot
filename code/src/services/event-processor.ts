@@ -1,7 +1,7 @@
 import { sendMessageToChat } from "./feishu";
 import { enqueueTask } from "./local-task";
 import { formatMessage } from "../utils/format-message";
-import type { AppConfig, AppEvent, EventMeta, EventSource, EventType } from "../types";
+import type { AppConfig, AppEvent, EventMeta, EventSource, EventType, ZentaoParsedFields } from "../types";
 
 export function createEvent<TPayload extends Record<string, unknown>>({
   source,
@@ -25,6 +25,12 @@ export function createEvent<TPayload extends Record<string, unknown>>({
   };
 }
 
+function shouldHandleZentaoEvent(event: AppEvent): boolean {
+  const payload = event.payload as Record<string, unknown> & { _parsed?: ZentaoParsedFields };
+  const status = payload._parsed?.status?.trim().toLowerCase();
+  return status === "active";
+}
+
 export async function handleEvent(event: AppEvent, config: AppConfig) {
   console.log("收到事件:", {
     source: event.source,
@@ -33,6 +39,19 @@ export async function handleEvent(event: AppEvent, config: AppConfig) {
   });
 
   if (event.type === "zentao.webhook.received") {
+    if (!shouldHandleZentaoEvent(event)) {
+      const payload = event.payload as Record<string, unknown> & {
+        _parsed?: { bugId?: string; status?: string; operator?: string; assignee?: string };
+      };
+      console.log(
+        `跳过非 active 禅道 Bug 事件: bugId=${payload._parsed?.bugId ?? "unknown"}, status=${payload._parsed?.status ?? "unknown"}, operator=${payload._parsed?.operator ?? "unknown"}, assignee=${payload._parsed?.assignee ?? "unknown"}`
+      );
+      return {
+        traceId: event.traceId,
+        messageResult: null,
+      };
+    }
+
     enqueueTask(event);
   }
 

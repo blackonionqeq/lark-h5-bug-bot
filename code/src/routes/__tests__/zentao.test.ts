@@ -18,6 +18,17 @@ const ZENTAO_TEXT = `【🔔 禅道BUG修改提醒】
 💥 严重程度：3
 🔗 详情链接：http://zentao.example.com/bug-view-80407.html`;
 
+const RESOLVED_ZENTAO_TEXT = `【🔔 禅道BUG修改提醒】
+🧑‍💻 创建人：张三
+🎬 操作人：李四
+👤 指派人：测试同学
+📝 BUG标题：页面白屏
+🆔 BUG编号：#80408
+📊 BUG状态：resolved
+⚡ 优先级：3
+💥 严重程度：3
+🔗 详情链接：http://zentao.example.com/bug-view-80408.html`;
+
 describe("POST /webhook/zentao", () => {
   let fetchSpy: ReturnType<typeof spyOn>;
   let app: ReturnType<typeof createZentaoRouter>;
@@ -53,7 +64,7 @@ describe("POST /webhook/zentao", () => {
     expect(body.success).toBe(true);
   });
 
-  it("enqueues a task for the bug", async () => {
+  it("enqueues a task for the active bug", async () => {
     await app.handle(
       new Request("http://localhost/webhook/zentao", {
         method: "POST",
@@ -65,6 +76,20 @@ describe("POST /webhook/zentao", () => {
     const task = taskStore.claim();
     expect(task).not.toBeNull();
     expect(task!.issueId).toBe("80407");
+  });
+
+  it("does not enqueue a task for non-active bug updates", async () => {
+    const res = await app.handle(
+      new Request("http://localhost/webhook/zentao", {
+        method: "POST",
+        body: JSON.stringify({ text: RESOLVED_ZENTAO_TEXT }),
+        headers: { "content-type": "application/json" },
+      })
+    );
+
+    expect(res.status).toBe(200);
+    const task = taskStore.claim();
+    expect(task).toBeNull();
   });
 
   it("returns failure when text is unparseable", async () => {
