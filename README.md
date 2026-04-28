@@ -1,6 +1,6 @@
 # 飞书 Bug Bot：禅道 Webhook + 自动 Bug 分析
 
-基于 **TypeScript + Bun** 的 Bug 自动分析系统。禅道提交 bug 后，云端服务将 bug 转发到飞书群聊，同时入队分析任务；本地 Worker 拉取任务，通过 Claude Code CLI 自动分析前端代码，将结论回传飞书群。
+基于 **TypeScript + Bun** 的 Bug 自动分析系统。禅道提交 bug 后，云端服务会先转发到飞书群聊；其中 **active** 状态的 bug 会额外入队分析任务，本地 Worker 再拉取任务，通过 Claude Code CLI 自动分析前端代码，将结论回传飞书群。
 
 ## 整体流程
 
@@ -10,7 +10,7 @@
     v
 云端 Elysia (code/)
     |-- 发送「收到 bug」到飞书群
-    |-- 创建 AnalysisTask，存入任务队列
+    |-- 若状态为 active，则创建 AnalysisTask，存入任务队列
     v
 本地 Worker (worker/)
     |-- 轮询拉取任务
@@ -94,7 +94,7 @@ AGENT_API_TOKEN=your_secret_token
 CLOUD_URL=https://your-domain.com
 REPO_PATH=/path/to/frontend-repo
 LOG_DIR=./logs
-POLL_INTERVAL_MS=5000
+POLL_INTERVAL_MS=20000
 TIMEOUT_SECONDS=300
 MAX_TURNS=20
 CLAUDE_MODEL=sonnet
@@ -111,7 +111,7 @@ CLAUDE_MODEL=sonnet
 | `REPO_PATH` | Worker 必需 | 待分析的前端项目路径 |
 | `AGENT_API_TOKEN` | Worker 必需 | 同上，Worker 用于请求云端 |
 | `LOG_DIR` | 可选 | Worker 日志目录，默认 `./logs` |
-| `POLL_INTERVAL_MS` | 可选 | 轮询间隔（ms），默认 `5000` |
+| `POLL_INTERVAL_MS` | 可选 | 轮询间隔（ms），默认 `20000` |
 | `TIMEOUT_SECONDS` | 可选 | Claude Code 超时（秒），默认 `300` |
 | `MAX_TURNS` | 可选 | Claude Code 最大 turn 数，默认 `20` |
 | `CLAUDE_MODEL` | 可选 | 使用的模型，默认 `sonnet` |
@@ -145,6 +145,9 @@ pnpm start
 ## 四、API 接口
 
 ### 禅道 Webhook
+
+当前行为：所有禅道 bug webhook 都会通知到飞书群；仅 `active` 状态的 bug 会进入自动分析队列，非 `active` 状态不会进入队列。
+
 
 ```http
 POST /webhook/zentao

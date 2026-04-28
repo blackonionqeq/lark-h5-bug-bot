@@ -44,15 +44,11 @@ export async function handleEvent(event: AppEvent, config: AppConfig) {
         _parsed?: { bugId?: string; status?: string; operator?: string; assignee?: string };
       };
       console.log(
-        `跳过非 active 禅道 Bug 事件: bugId=${payload._parsed?.bugId ?? "unknown"}, status=${payload._parsed?.status ?? "unknown"}, operator=${payload._parsed?.operator ?? "unknown"}, assignee=${payload._parsed?.assignee ?? "unknown"}`
+        `非 active 禅道 Bug 事件仅发送通知，不进入分析队列: bugId=${payload._parsed?.bugId ?? "unknown"}, status=${payload._parsed?.status ?? "unknown"}, operator=${payload._parsed?.operator ?? "unknown"}, assignee=${payload._parsed?.assignee ?? "unknown"}`
       );
-      return {
-        traceId: event.traceId,
-        messageResult: null,
-      };
+    } else {
+      enqueueTask(event);
     }
-
-    enqueueTask(event);
   }
 
   const messageContent = formatMessage(event, config.userMentions);

@@ -7,7 +7,7 @@ export function makeWorkerConfig(overrides?: Partial<WorkerConfig>): WorkerConfi
     agentApiToken: "test-token",
     repoPath: "/tmp/test-repo",
     logDir: "/tmp/test-logs",
-    pollIntervalMs: 5000,
+    pollIntervalMs: 20000,
     maxTurns: 20,
     timeoutSeconds: 300,
     claudeModel: "sonnet",

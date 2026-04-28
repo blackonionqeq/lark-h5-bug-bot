@@ -84,7 +84,7 @@ describe("handleEvent", () => {
     expect(task!.issueId).toBe("BUG-999");
   });
 
-  it("skips non-active zentao.webhook.received events", async () => {
+  it("notifies but does not enqueue non-active zentao.webhook.received events", async () => {
     const payload = makeZentaoPayload();
     const event = createEvent({
       source: "zentao",
@@ -110,11 +110,11 @@ describe("handleEvent", () => {
     const result = await handleEvent(event, config);
 
     expect(result.traceId).toBe(event.traceId);
-    expect(result.messageResult).toBeNull();
+    expect(result.messageResult).not.toBeNull();
 
     const task = taskStore.claim();
     expect(task).toBeNull();
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(fetchSpy).toHaveBeenCalled();
   });
 
   it("does NOT enqueue task for non-zentao events", async () => {

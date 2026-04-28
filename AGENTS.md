@@ -71,7 +71,7 @@ Two components:
 
 1. `code/src/index.ts` creates the Elysia app and mounts route factories.
 2. Route modules in `code/src/routes/` normalize payloads into `AppEvent`.
-3. `code/src/services/event-processor.ts` creates events, enqueues analysis tasks for Zentao events, formats messages, and sends to Feishu.
+3. `code/src/services/event-processor.ts` creates events, formats messages, sends them to Feishu, and enqueues analysis tasks only for `active` Zentao events.
 4. `code/src/services/task-store.ts` is the in-memory task queue (Phase 1; designed for SQLite replacement in Phase 2).
 5. `code/src/services/local-task.ts` creates `AnalysisTask` objects and enqueues them.
 6. `code/src/routes/agent-tasks.ts` exposes the task queue to the worker via REST API with Bearer auth.
