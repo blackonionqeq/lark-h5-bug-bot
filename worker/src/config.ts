@@ -15,19 +15,25 @@ export interface WorkerConfig {
   maxTurns: number;
   timeoutSeconds: number;
   claudeModel: string;
+  claudeExecutable: string;
 }
 
 export function getConfig(overrides?: Partial<WorkerConfig>): WorkerConfig {
+  const defaults: WorkerConfig = {
+    cloudUrl: "",
+    agentApiToken: "",
+    repoPath: "",
+    logDir: "./logs",
+    pollIntervalMs: 20000,
+    maxTurns: 20,
+    timeoutSeconds: 300,
+    claudeModel: "sonnet",
+    claudeExecutable: "claude",
+  };
+
   if (overrides) {
     return {
-      cloudUrl: "",
-      agentApiToken: "",
-      repoPath: "",
-      logDir: "./logs",
-      pollIntervalMs: 20000,
-      maxTurns: 20,
-      timeoutSeconds: 300,
-      claudeModel: "sonnet",
+      ...defaults,
       ...overrides,
     };
   }
@@ -41,5 +47,6 @@ export function getConfig(overrides?: Partial<WorkerConfig>): WorkerConfig {
     maxTurns: Number(Bun.env.MAX_TURNS) || 20,
     timeoutSeconds: Number(Bun.env.TIMEOUT_SECONDS) || 300,
     claudeModel: Bun.env.CLAUDE_MODEL || "sonnet",
+    claudeExecutable: Bun.env.CLAUDE_EXECUTABLE || "claude",
   };
 }

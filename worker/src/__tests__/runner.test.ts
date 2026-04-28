@@ -147,6 +147,7 @@ describe("runClaudeAnalysis", () => {
     const config = makeWorkerConfig({ logDir, timeoutSeconds: 5 });
     const timeoutHandle = { id: "timeout-1" };
     const clearTimeoutFn = mock(() => {});
+    let command: string[] | undefined;
 
     const { result, logPath } = await runClaudeAnalysis(
       "白屏问题",
@@ -154,23 +155,60 @@ describe("runClaudeAnalysis", () => {
       taskId,
       config,
       {
-        spawn: () => ({
-          exited: Promise.resolve(0),
-          stdout: streamFromText(resultEvent(JSON.stringify({ status: "resolved", summary: "done", reason: "fixed", files: ["src/a.ts"] }))),
-          stderr: streamFromText(""),
-          kill: mock(() => {}),
-        }),
+        spawn: (spawnCommand) => {
+          command = spawnCommand;
+          return {
+            exited: Promise.resolve(0),
+            stdout: streamFromText(resultEvent(JSON.stringify({ status: "resolved", summary: "done", reason: "fixed", files: ["src/a.ts"] }))),
+            stderr: streamFromText(""),
+            kill: mock(() => {}),
+          };
+        },
         setTimeoutFn: () => timeoutHandle,
         clearTimeoutFn,
       }
     );
 
+    expect(command?.[0]).toBe("claude");
     expect(result.status).toBe("resolved");
     expect(result.summary).toBe("done");
     expect(logPath).toBe(join(logDir, `${taskId}.jsonl`));
     expect(await readFile(logPath, "utf-8")).toContain('"type":"result"');
     expect(clearTimeoutFn).toHaveBeenCalledWith(timeoutHandle);
     expect(await pathExists(join(tmpdir(), `${taskId}-prompt.txt`))).toBe(false);
+  });
+
+  it("uses configured claude executable override", async () => {
+    const taskId = `runner-custom-bin-${crypto.randomUUID()}`;
+    const logDir = await createLogDir();
+    const config = makeWorkerConfig({
+      logDir,
+      timeoutSeconds: 5,
+      claudeExecutable: "/opt/homebrew/bin/claude",
+    });
+    let command: string[] | undefined;
+
+    await runClaudeAnalysis(
+      "自定义命令",
+      "验证自定义 Claude 可执行路径",
+      taskId,
+      config,
+      {
+        spawn: (spawnCommand) => {
+          command = spawnCommand;
+          return {
+            exited: Promise.resolve(0),
+            stdout: streamFromText(resultEvent(JSON.stringify({ status: "resolved", summary: "done", reason: "fixed", files: [] }))),
+            stderr: streamFromText(""),
+            kill: mock(() => {}),
+          };
+        },
+        setTimeoutFn: () => ({ id: "timeout-custom-bin" }),
+        clearTimeoutFn: mock(() => {}),
+      }
+    );
+
+    expect(command?.[0]).toBe("/opt/homebrew/bin/claude");
   });
 
   it("returns failed result when claude exits with non-zero code", async () => {

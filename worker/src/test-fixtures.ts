@@ -11,6 +11,7 @@ export function makeWorkerConfig(overrides?: Partial<WorkerConfig>): WorkerConfi
     maxTurns: 20,
     timeoutSeconds: 300,
     claudeModel: "sonnet",
+    claudeExecutable: "claude",
     ...overrides,
   };
 }

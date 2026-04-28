@@ -6,7 +6,7 @@
 
 ### 1.1 项目配置复用
 
-`claude -p` **默认加载目标项目的全部配置**，与交互模式一致：
+`claude -p` 默认加载目标项目的全部配置，与交互模式一致；Worker 如需使用其他可执行文件路径，可通过 `CLAUDE_EXECUTABLE` 覆盖。
 
 | 配置项 | 是否生效 | 说明 |
 |---|---|---|
@@ -23,10 +23,10 @@
 
 ### 1.2 工作目录
 
-Worker 必须在前端项目根目录下执行 `claude -p`，否则无法加载项目配置，Claude 也无法访问源码文件。
+Worker 必须在前端项目根目录下执行 Claude CLI 的 `-p` 模式，否则无法加载项目配置，Claude 也无法访问源码文件。默认执行 `claude -p`，也可通过 `CLAUDE_EXECUTABLE` 指向其他命令名或绝对路径。
 
-```
-cd /path/to/frontend-repo && claude -p ...
+```bash
+cd /path/to/frontend-repo && "${CLAUDE_EXECUTABLE:-claude}" -p ...
 ```
 
 ## 2. Prompt 传递
@@ -87,7 +87,7 @@ rm -f "$PROMPT_FILE"
 ## 3. CLI 参数
 
 ```bash
-timeout 300 claude -p "$(cat "$PROMPT_FILE")" \
+timeout 300 "${CLAUDE_EXECUTABLE:-claude}" -p "$(cat "$PROMPT_FILE")" \
   --output-format stream-json \
   --max-turns 20 \
   --model sonnet
@@ -100,7 +100,9 @@ timeout 300 claude -p "$(cat "$PROMPT_FILE")" \
 | `--output-format` | `stream-json` | JSONL 事件流，兼顾结果解析和审计（见 §4） |
 | `--max-turns` | `20` | 分析一个 bug 通常 10-15 turn，20 留有余量且防止失控 |
 | `--model` | `sonnet` | 性价比优先；可按需切换为 `opus`（更强分析能力） |
-| `timeout` | `300`（5 分钟） | 外部超时兜底，`claude -p` 自身无超时参数 |
+| `timeout` | `300`（5 分钟） | 外部超时兜底，Claude CLI 自身无超时参数 |
+
+其中 `CLAUDE_EXECUTABLE` 可选，默认值为 `claude`；当 Worker 运行在 pm2、launchd 或其他拿不到交互 shell `PATH` 的环境时，建议显式配置为 Claude Code CLI 的绝对路径。
 
 ### 关于工具权限
 
@@ -126,7 +128,7 @@ timeout 300 claude -p "$(cat "$PROMPT_FILE")" \
 
 ```bash
 LOG_FILE="${LOG_DIR}/${TASK_ID}.jsonl"
-timeout 300 claude -p "..." --output-format stream-json > "$LOG_FILE" 2>&1
+timeout 300 "${CLAUDE_EXECUTABLE:-claude}" -p "..." --output-format stream-json > "$LOG_FILE" 2>&1
 ```
 
 日志内容包含：
@@ -184,6 +186,7 @@ TITLE="$2"
 DESCRIPTION="$3"
 REPO_PATH="$4"
 LOG_DIR="$5"
+CLAUDE_EXECUTABLE="${CLAUDE_EXECUTABLE:-claude}"
 
 PROMPT_FILE=$(mktemp)
 LOG_FILE="${LOG_DIR}/${TASK_ID}.jsonl"
@@ -208,7 +211,7 @@ PROMPT_EOF
 
 # --- 执行分析 ---
 cd "$REPO_PATH"
-timeout 300 claude -p "$(cat "$PROMPT_FILE")" \
+timeout 300 "$CLAUDE_EXECUTABLE" -p "$(cat "$PROMPT_FILE")" \
   --output-format stream-json \
   --max-turns 20 \
   --model sonnet \
@@ -227,6 +230,7 @@ Worker 的 `runner.ts` 通过 `child_process.spawn` 调用此脚本，根据退�
 ## 7. 后续扩展点
 
 - **模型切换**：通过环境变量 `CLAUDE_MODEL` 控制，脚本中改为 `--model "${CLAUDE_MODEL:-sonnet}"`
+- **命令路径覆盖**：通过环境变量 `CLAUDE_EXECUTABLE` 控制 Claude Code CLI 的命令名或绝对路径
 - **并发控制**：Phase 1 单并发（一次只运行一个脚本实例），Phase 2 可用信号量控制并发数
 - **Prompt 迭代**：模板外置为独立文件（如 `worker/prompts/analyze-bug.txt`），方便调整而不改代码
 - **进度上报**：如需实时进度，Worker 可流式读取 JSONL 并在 `tool_use` 事件时向云端 POST 中间状态

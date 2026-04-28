@@ -98,6 +98,7 @@ POLL_INTERVAL_MS=20000
 TIMEOUT_SECONDS=300
 MAX_TURNS=20
 CLAUDE_MODEL=sonnet
+CLAUDE_EXECUTABLE=claude
 ```
 
 | 变量 | 必需 | 说明 |
@@ -115,6 +116,7 @@ CLAUDE_MODEL=sonnet
 | `TIMEOUT_SECONDS` | 可选 | Claude Code 超时（秒），默认 `300` |
 | `MAX_TURNS` | 可选 | Claude Code 最大 turn 数，默认 `20` |
 | `CLAUDE_MODEL` | 可选 | 使用的模型，默认 `sonnet` |
+| `CLAUDE_EXECUTABLE` | 可选 | Claude Code CLI 可执行文件名或绝对路径，默认 `claude` |
 
 ---
 
@@ -132,7 +134,7 @@ pnpm typecheck    # 类型检查
 
 ### 本地 Worker
 
-Worker 需要本机安装 Claude Code CLI，并且 `REPO_PATH` 指向的前端项目已 clone。
+Worker 需要本机安装 Claude Code CLI，并且 `REPO_PATH` 指向的前端项目已 clone。默认通过 `PATH` 查找 `claude`；如果后台进程环境拿不到该命令，可通过 `CLAUDE_EXECUTABLE` 显式指定可执行文件名或绝对路径。
 
 ```bash
 cd worker
@@ -232,7 +234,7 @@ scp lark-h5-bug-bot.tar.gz your-user@your-server:/opt/
 1. 飞书消息存在限频，控制调用频率。
 2. Worker 和云端可以部署在不同机器上，Worker 只需能访问云端的 HTTP 地址。
 3. Worker 通过出站 HTTPS 请求拉取任务，不需要内网穿透。
-4. Claude Code CLI 需要在 Worker 机器上安装并完成认证。
+4. Claude Code CLI 需要在 Worker 机器上安装并完成认证；若 pm2 或其他后台环境拿不到 `claude`，请设置 `CLAUDE_EXECUTABLE`。
 5. 分诊为规则策略，默认将不确定的 bug 归类为前端，后续可按日志数据决定是否引入 LLM 分诊。
 
 ---

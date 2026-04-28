@@ -99,7 +99,7 @@ export async function runClaudeAnalysis(
   console.log(`[runner] 日志文件: ${logPath}`);
 
   const proc = runnerDeps.spawn(
-    ["claude", "-p", promptContent, "--output-format", "stream-json", "--max-turns", String(config.maxTurns), "--model", config.claudeModel],
+    [config.claudeExecutable, "-p", promptContent, "--output-format", "stream-json", "--verbose", "--max-turns", String(config.maxTurns), "--model", config.claudeModel],
     {
       cwd: config.repoPath,
       stdout: "pipe",
