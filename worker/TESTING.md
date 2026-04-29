@@ -100,41 +100,38 @@ Worker startup and runtime logs are printed to stdout.
 
 ## PM2 operations
 
-The worker can be managed by PM2 using the repository-level `ecosystem.config.cjs`:
+The worker can be managed by PM2 using the repository-level `ecosystem.config.cjs`.
+
+Use the helper script from the repository root:
 
 ```bash
-# from repository root
-pm2 start ecosystem.config.cjs
-pm2 save
-```
-
-Common operations:
-
-```bash
-pm2 status
-pm2 logs lark-h5-bug-bot-worker
-pm2 logs lark-h5-bug-bot-worker --lines 100
-pm2 restart lark-h5-bug-bot-worker
-pm2 stop lark-h5-bug-bot-worker
-pm2 delete lark-h5-bug-bot-worker
+./scripts/worker-pm2.sh start
+./scripts/worker-pm2.sh status
+./scripts/worker-pm2.sh logs
+./scripts/worker-pm2.sh logs100
+./scripts/worker-pm2.sh restart
+./scripts/worker-pm2.sh stop
+./scripts/worker-pm2.sh delete
+./scripts/worker-pm2.sh save
+./scripts/worker-pm2.sh startup
 ```
 
 After changing environment variables in `../.env`, restart the worker:
 
 ```bash
-pm2 restart lark-h5-bug-bot-worker
+./scripts/worker-pm2.sh restart
 ```
 
 To enable startup after machine reboot, run:
 
 ```bash
-pm2 startup
+./scripts/worker-pm2.sh startup
 ```
 
 Then copy and execute the `sudo ...` command printed by PM2, and save the current process list again:
 
 ```bash
-pm2 save
+./scripts/worker-pm2.sh save
 ```
 
 ### Log rotation
@@ -148,11 +145,15 @@ There is currently no application-side log rotation.
 If PM2 logs need rotation, install and configure PM2's logrotate module:
 
 ```bash
-pm2 install pm2-logrotate
-pm2 set pm2-logrotate:max_size 10M
-pm2 set pm2-logrotate:retain 14
-pm2 set pm2-logrotate:compress true
+./scripts/worker-pm2.sh logrotate
 ```
+
+This configures:
+
+- `max_size`: `10M`
+- `retain`: `14`
+- `compress`: `true`
+- `rotateInterval`: `0 0 * * *`
 
 This only rotates PM2 stdout/stderr logs. It does not clean up the per-task JSONL files under `LOG_DIR`.
 
