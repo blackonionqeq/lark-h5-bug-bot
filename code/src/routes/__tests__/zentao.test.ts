@@ -16,6 +16,11 @@ const ZENTAO_TEXT = `【🔔 禅道BUG修改提醒】
 📊 BUG状态：active
 ⚡ 优先级：3
 💥 严重程度：3
+🧾 BUG描述：打开首页后白屏
+📋 重现步骤：1. 登录
+2. 进入首页
+✅ 期望结果：页面正常展示
+❌ 实际结果：页面白屏
 🔗 详情链接：http://zentao.example.com/bug-view-80407.html`;
 
 const RESOLVED_ZENTAO_TEXT = `【🔔 禅道BUG修改提醒】
@@ -76,6 +81,8 @@ describe("POST /webhook/zentao", () => {
     const task = taskStore.claim();
     expect(task).not.toBeNull();
     expect(task!.issueId).toBe("80407");
+    expect(task!.description).toContain("描述: 打开首页后白屏");
+    expect(task!.description).toContain("重现步骤: 1. 登录\n2. 进入首页");
   });
 
   it("does not enqueue a task for non-active bug updates", async () => {

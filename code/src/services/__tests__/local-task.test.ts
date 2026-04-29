@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "bun:test";
 import { taskStore } from "../task-store";
 import { enqueueTask } from "../local-task";
-import { makeAppEvent, makeZentaoPayload, makeAnalysisTask } from "../../test-fixtures";
+import { makeAppEvent, makeZentaoPayload } from "../../test-fixtures";
 import type { ZentaoParsedFields } from "../../types";
 
 const testParsed: ZentaoParsedFields = {
@@ -13,6 +13,8 @@ const testParsed: ZentaoParsedFields = {
   creator: "张三",
   operator: "李四",
   assignee: "王五",
+  description: "用户打开首页后白屏",
+  steps: "进入首页",
   link: "http://zentao.example.com/bug-view-999.html",
 };
 
@@ -46,6 +48,8 @@ describe("enqueueTask", () => {
     expect(stored!.status).toBe("queued");
     expect(stored!.title).toBe("测试标题");
     expect(stored!.description).toContain("active");
+    expect(stored!.description).toContain("描述: 用户打开首页后白屏");
+    expect(stored!.description).toContain("重现步骤: 进入首页");
     expect(stored!.issueId).toBe("BUG-999");
   });
 

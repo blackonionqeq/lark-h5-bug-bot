@@ -45,6 +45,10 @@ export interface ZentaoParsedFields {
   creator: string;
   operator: string;
   assignee: string;
+  description?: string;
+  steps?: string;
+  expected?: string;
+  actual?: string;
   link: string;
 }
 

@@ -44,6 +44,10 @@ export function formatMessage(event: AppEvent, userMentions?: Record<string, str
     lines.push(`${emoji} 禅道 Bug #${parsed.bugId} — ${parsed.title}`);
     lines.push(`状态: ${parsed.status} | 优先级: ${parsed.priority} | 严重程度: ${parsed.severity}`);
     lines.push(`创建人: ${parsed.creator} → 操作人: ${parsed.operator} → 指派人: ${mentionUser(parsed.assignee, userMentions)}`);
+    if (parsed.description) lines.push(`描述: ${parsed.description}`);
+    if (parsed.steps) lines.push(`重现步骤: ${parsed.steps}`);
+    if (parsed.expected) lines.push(`期望结果: ${parsed.expected}`);
+    if (parsed.actual) lines.push(`实际结果: ${parsed.actual}`);
     if (parsed.link) lines.push(`详情: ${parsed.link}`);
     return lines.join("\n");
   }

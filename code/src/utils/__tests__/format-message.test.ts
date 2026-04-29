@@ -49,6 +49,28 @@ describe("formatMessage", () => {
       const result = formatMessage(event, { "王五": "ou_abc123" });
       expect(result).toContain('<at user_id="ou_abc123">王五</at>');
     });
+
+    it("includes detailed bug fields when provided", () => {
+      const event = makeAppEvent({
+        type: "zentao.webhook.received",
+        payload: {
+          ...makeZentaoPayload(),
+          _parsed: {
+            ...testParsed,
+            description: "打开首页后白屏",
+            steps: "1. 登录\n2. 进入首页",
+            expected: "页面正常展示",
+            actual: "页面白屏并报错",
+          },
+        },
+      });
+
+      const result = formatMessage(event);
+      expect(result).toContain("描述: 打开首页后白屏");
+      expect(result).toContain("重现步骤: 1. 登录\n2. 进入首页");
+      expect(result).toContain("期望结果: 页面正常展示");
+      expect(result).toContain("实际结果: 页面白屏并报错");
+    });
   });
 
   describe("analysis.result.received", () => {

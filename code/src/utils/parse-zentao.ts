@@ -20,8 +20,7 @@ export function parseZentaoText(payload: ZentaoWebhookPayload): ZentaoParsedFiel
   if (!text || typeof text !== "string") return null;
 
   const extract = (label: string): string | undefined => {
-    // Match label (which may contain emoji) followed by Chinese/English colon and the value
-    const regex = new RegExp(`${escapeRegex(label)}[：:]\\s*(.+)`);
+    const regex = new RegExp(`(?:^|\\n).*${escapeRegex(label)}[：:]\\s*([^\\n]*(?:\\n(?!.*[：:]).*)*)`);
     const match = text.match(regex);
     return match?.[1]?.trim();
   };
@@ -36,11 +35,15 @@ export function parseZentaoText(payload: ZentaoWebhookPayload): ZentaoParsedFiel
   const creator = extract("创建人") ?? "";
   const operator = extract("操作人") ?? "";
   const assignee = extract("指派人") ?? "";
+  const description = extract("BUG描述") ?? extract("描述") ?? extract("需求描述");
+  const steps = extract("重现步骤") ?? extract("复现步骤") ?? extract("操作步骤");
+  const expected = extract("期望结果") ?? extract("预期结果");
+  const actual = extract("实际结果") ?? extract("实际情况");
   const link = extract("详情链接") ?? "";
 
   if (!bugId) return null;
 
-  return { bugId, title, status, priority, severity, creator, operator, assignee, link };
+  return { bugId, title, status, priority, severity, creator, operator, assignee, description, steps, expected, actual, link };
 }
 
 function escapeRegex(s: string): string {
