@@ -98,6 +98,64 @@ Current runner tests cover:
 
 Worker startup and runtime logs are printed to stdout.
 
+## PM2 operations
+
+The worker can be managed by PM2 using the repository-level `ecosystem.config.cjs`:
+
+```bash
+# from repository root
+pm2 start ecosystem.config.cjs
+pm2 save
+```
+
+Common operations:
+
+```bash
+pm2 status
+pm2 logs lark-h5-bug-bot-worker
+pm2 logs lark-h5-bug-bot-worker --lines 100
+pm2 restart lark-h5-bug-bot-worker
+pm2 stop lark-h5-bug-bot-worker
+pm2 delete lark-h5-bug-bot-worker
+```
+
+After changing environment variables in `../.env`, restart the worker:
+
+```bash
+pm2 restart lark-h5-bug-bot-worker
+```
+
+To enable startup after machine reboot, run:
+
+```bash
+pm2 startup
+```
+
+Then copy and execute the `sudo ...` command printed by PM2, and save the current process list again:
+
+```bash
+pm2 save
+```
+
+### Log rotation
+
+There is currently no application-side log rotation.
+
+- PM2 captures stdout/stderr under `~/.pm2/logs/`.
+- Claude raw `stream-json` output is written per task under `LOG_DIR` as `<taskId>.jsonl`.
+- `LOG_DIR` defaults to `./logs` relative to `worker/` unless overridden in `.env`.
+
+If PM2 logs need rotation, install and configure PM2's logrotate module:
+
+```bash
+pm2 install pm2-logrotate
+pm2 set pm2-logrotate:max_size 10M
+pm2 set pm2-logrotate:retain 14
+pm2 set pm2-logrotate:compress true
+```
+
+This only rotates PM2 stdout/stderr logs. It does not clean up the per-task JSONL files under `LOG_DIR`.
+
 ### 1. Startup config
 
 When the worker starts, it prints the basic config:
