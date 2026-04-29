@@ -48,7 +48,7 @@ Tests use Bun's built-in `bun:test` runner with hardcoded fixture data — no `.
 - `AGENT_API_TOKEN` — must match cloud config
 - `REPO_PATH` — path to the frontend project to analyze
 
-Optional worker vars: `LOG_DIR`, `POLL_INTERVAL_MS`, `TIMEOUT_SECONDS`, `MAX_TURNS`, `CLAUDE_MODEL`.
+Optional worker vars: `LOG_DIR`, `POLL_INTERVAL_MS`, `TIMEOUT_SECONDS`, `MAX_TURNS`, `CLAUDE_MODEL`, `CLAUDE_EXECUTABLE`, `PRE_ANALYSIS_SCRIPT`.
 
 Config loading is centralized in `code/src/config.ts` (cloud) and `worker/src/config.ts` (worker).
 

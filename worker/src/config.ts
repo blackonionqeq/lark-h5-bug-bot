@@ -16,6 +16,7 @@ export interface WorkerConfig {
   timeoutSeconds: number;
   claudeModel: string;
   claudeExecutable: string;
+  preAnalysisScript: string;
 }
 
 export function getConfig(overrides?: Partial<WorkerConfig>): WorkerConfig {
@@ -29,6 +30,7 @@ export function getConfig(overrides?: Partial<WorkerConfig>): WorkerConfig {
     timeoutSeconds: 300,
     claudeModel: "sonnet",
     claudeExecutable: "claude",
+    preAnalysisScript: "./scripts/pre-analysis.sh",
   };
 
   if (overrides) {
@@ -48,5 +50,6 @@ export function getConfig(overrides?: Partial<WorkerConfig>): WorkerConfig {
     timeoutSeconds: Number(Bun.env.TIMEOUT_SECONDS) || 300,
     claudeModel: Bun.env.CLAUDE_MODEL || "sonnet",
     claudeExecutable: Bun.env.CLAUDE_EXECUTABLE || "claude",
+    preAnalysisScript: Bun.env.PRE_ANALYSIS_SCRIPT || "./scripts/pre-analysis.sh",
   };
 }

@@ -14,6 +14,7 @@ console.log(`日志目录: ${config.logDir}`);
 console.log(`轮询间隔: ${config.pollIntervalMs}ms`);
 console.log(`模型: ${config.claudeModel}`);
 console.log(`Claude CLI: ${config.claudeExecutable}`);
+console.log(`分析前脚本: ${config.preAnalysisScript}`);
 console.log(`超时: ${config.timeoutSeconds}s / 最多 ${config.maxTurns} turns`);
 
 let running = false;

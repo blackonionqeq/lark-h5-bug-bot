@@ -178,6 +178,74 @@ describe("runClaudeAnalysis", () => {
     expect(await pathExists(join(tmpdir(), `${taskId}-prompt.txt`))).toBe(false);
   });
 
+  it("runs configured pre-analysis script before Claude", async () => {
+    const taskId = `runner-pre-analysis-${crypto.randomUUID()}`;
+    const logDir = await createLogDir();
+    const config = makeWorkerConfig({
+      logDir,
+      timeoutSeconds: 5,
+      preAnalysisScript: "../worker/scripts/pre-analysis.sh",
+    });
+    const runPreAnalysisScript = mock(async () => ({ exitCode: 0, stdout: "pulled", stderr: "" }));
+    const spawn = mock(() => ({
+      exited: Promise.resolve(0),
+      stdout: streamFromText(resultEvent(JSON.stringify({ status: "resolved", summary: "done", reason: "fixed", files: [] }))),
+      stderr: streamFromText(""),
+      kill: mock(() => {}),
+    }));
+
+    await runClaudeAnalysis(
+      "预处理",
+      "验证分析前脚本",
+      taskId,
+      config,
+      {
+        spawn,
+        runPreAnalysisScript,
+        setTimeoutFn: () => ({ id: "timeout-pre-analysis" }),
+        clearTimeoutFn: mock(() => {}),
+      }
+    );
+
+    expect(runPreAnalysisScript).toHaveBeenCalledWith("../worker/scripts/pre-analysis.sh", config.repoPath);
+    expect(spawn).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns failed result when pre-analysis script exits non-zero", async () => {
+    const taskId = `runner-pre-analysis-fail-${crypto.randomUUID()}`;
+    const logDir = await createLogDir();
+    const config = makeWorkerConfig({
+      logDir,
+      timeoutSeconds: 5,
+      preAnalysisScript: "../worker/scripts/pre-analysis.sh",
+    });
+    const spawn = mock(() => ({
+      exited: Promise.resolve(0),
+      stdout: streamFromText(""),
+      stderr: streamFromText(""),
+      kill: mock(() => {}),
+    }));
+
+    const { result } = await runClaudeAnalysis(
+      "预处理失败",
+      "验证脚本失败会中断分析",
+      taskId,
+      config,
+      {
+        spawn,
+        runPreAnalysisScript: async () => ({ exitCode: 1, stdout: "", stderr: "pull failed" }),
+        setTimeoutFn: () => ({ id: "timeout-pre-analysis-fail" }),
+        clearTimeoutFn: mock(() => {}),
+      }
+    );
+
+    expect(result.status).toBe("failed");
+    expect(result.summary).toContain("分析前脚本异常退出");
+    expect(result.reason).toBe("pull failed");
+    expect(spawn).not.toHaveBeenCalled();
+    expect(await pathExists(join(tmpdir(), `${taskId}-prompt.txt`))).toBe(false);
+  });
+
   it("uses configured claude executable override", async () => {
     const taskId = `runner-custom-bin-${crypto.randomUUID()}`;
     const logDir = await createLogDir();

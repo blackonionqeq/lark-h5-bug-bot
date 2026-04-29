@@ -18,8 +18,15 @@ type SpawnedProcess = {
   kill(): void;
 };
 
+type PreAnalysisResult = {
+  exitCode: number | null;
+  stdout: string;
+  stderr: string;
+};
+
 export interface RunnerDeps {
   spawn(command: string[], options: SpawnOptions): SpawnedProcess;
+  runPreAnalysisScript(scriptPath: string, cwd: string): Promise<PreAnalysisResult>;
   setTimeoutFn(callback: () => void, ms: number): unknown;
   clearTimeoutFn(timeoutHandle: unknown): void;
 }
@@ -27,6 +34,19 @@ export interface RunnerDeps {
 const defaultRunnerDeps: RunnerDeps = {
   spawn(command, options) {
     return Bun.spawn(command, options);
+  },
+  async runPreAnalysisScript(scriptPath, cwd) {
+    const proc = Bun.spawn([scriptPath], {
+      cwd,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [exitCode, stdout, stderr] = await Promise.all([
+      proc.exited,
+      proc.stdout ? new Response(proc.stdout).text() : Promise.resolve(""),
+      proc.stderr ? new Response(proc.stderr).text() : Promise.resolve(""),
+    ]);
+    return { exitCode, stdout, stderr };
   },
   setTimeoutFn(callback, ms) {
     return setTimeout(callback, ms);
@@ -97,6 +117,24 @@ export async function runClaudeAnalysis(
   console.log(`[runner] 启动分析, taskId=${taskId}`);
   console.log(`[runner] 工作目录: ${config.repoPath}`);
   console.log(`[runner] 日志文件: ${logPath}`);
+  if (config.preAnalysisScript) {
+    console.log(`[runner] 执行分析前脚本: ${config.preAnalysisScript}`);
+    const preAnalysis = await runnerDeps.runPreAnalysisScript(config.preAnalysisScript, config.repoPath);
+    if (preAnalysis.stdout) console.log(`[runner] 分析前脚本 stdout: ${preAnalysis.stdout.slice(0, 500)}`);
+    if (preAnalysis.stderr) console.log(`[runner] 分析前脚本 stderr: ${preAnalysis.stderr.slice(0, 500)}`);
+    if (preAnalysis.exitCode !== 0) {
+      await unlink(promptFile);
+      return {
+        result: {
+          status: "failed",
+          summary: `分析前脚本异常退出 (${preAnalysis.exitCode})`,
+          reason: (preAnalysis.stderr || preAnalysis.stdout).slice(0, 500),
+          files: [],
+        },
+        logPath,
+      };
+    }
+  }
 
   const proc = runnerDeps.spawn(
     [config.claudeExecutable, "-p", promptContent, "--output-format", "stream-json", "--verbose", "--max-turns", String(config.maxTurns), "--model", config.claudeModel],

@@ -99,6 +99,7 @@ TIMEOUT_SECONDS=300
 MAX_TURNS=20
 CLAUDE_MODEL=sonnet
 CLAUDE_EXECUTABLE=claude
+PRE_ANALYSIS_SCRIPT=./scripts/pre-analysis.sh
 ```
 
 | 变量 | 必需 | 说明 |
@@ -117,6 +118,7 @@ CLAUDE_EXECUTABLE=claude
 | `MAX_TURNS` | 可选 | Claude Code 最大 turn 数，默认 `20` |
 | `CLAUDE_MODEL` | 可选 | 使用的模型，默认 `sonnet` |
 | `CLAUDE_EXECUTABLE` | 可选 | Claude Code CLI 可执行文件名或绝对路径，默认 `claude` |
+| `PRE_ANALYSIS_SCRIPT` | 可选 | 分析前执行的脚本，默认 `./scripts/pre-analysis.sh`，从 `worker/` 目录启动时使用该默认值 |
 
 ---
 
