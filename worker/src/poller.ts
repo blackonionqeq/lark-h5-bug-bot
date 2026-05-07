@@ -1,3 +1,4 @@
+import { error } from "./logger";
 import type { AnalysisTask } from "../../code/src/types";
 
 export interface CloudTaskApi {
@@ -19,7 +20,7 @@ export function createCloudTaskApi(cloudUrl: string, agentToken: string): CloudT
       headers: authHeaders,
     });
     if (!res.ok) {
-      console.error(`[poller] 拉取任务失败: HTTP ${res.status}`);
+      error("poller", `拉取任务失败: HTTP ${res.status}`);
       return null;
     }
     const data = (await res.json()) as { task: AnalysisTask | null };
@@ -36,7 +37,7 @@ export function createCloudTaskApi(cloudUrl: string, agentToken: string): CloudT
       body: JSON.stringify(patch),
     });
     if (!res.ok) {
-      console.error(`[poller] 提交结果失败: HTTP ${res.status}`);
+      error("poller", `提交结果失败: HTTP ${res.status}`);
     }
   }
 

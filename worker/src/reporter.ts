@@ -1,3 +1,4 @@
+import { error, log } from "./logger";
 import type { AnalysisResult, TriageResult, AnalysisTask } from "../../code/src/types";
 
 export async function reportToCallback(
@@ -18,7 +19,7 @@ export async function reportToCallback(
     files: analysisResult.files,
   };
 
-  console.log(`[reporter] 回调云端: ${cloudUrl}/callback/analysis-result`);
+  log("reporter", `回调云端: ${cloudUrl}/callback/analysis-result`);
 
   const res = await fetch(`${cloudUrl}/callback/analysis-result`, {
     method: "POST",
@@ -27,8 +28,8 @@ export async function reportToCallback(
   });
 
   if (!res.ok) {
-    console.error(`[reporter] 回调失败: HTTP ${res.status}`);
+    error("reporter", `回调失败: HTTP ${res.status}`);
   } else {
-    console.log("[reporter] 回调成功");
+    log("reporter", "回调成功");
   }
 }

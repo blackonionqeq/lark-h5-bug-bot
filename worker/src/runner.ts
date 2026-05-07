@@ -2,6 +2,7 @@ import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { error, log } from "./logger";
 import type { WorkerConfig } from "./config";
 import type { AnalysisResult } from "../../code/src/types";
 
@@ -119,15 +120,15 @@ export async function runClaudeAnalysis(
   // Read prompt from file for the -p argument
   const promptContent = await readFile(promptFile, "utf-8");
 
-  console.log(`[runner] 启动分析, taskId=${taskId}`);
-  console.log(`[runner] 工作目录: ${config.repoPath}`);
-  console.log(`[runner] 日志文件: ${logPath}`);
+  log("runner", `启动分析, taskId=${taskId}`);
+  log("runner", `工作目录: ${config.repoPath}`);
+  log("runner", `日志文件: ${logPath}`);
   if (config.preAnalysisScript) {
     const preAnalysisScript = resolveWorkerPath(config.preAnalysisScript);
-    console.log(`[runner] 执行分析前脚本: ${preAnalysisScript}`);
+    log("runner", `执行分析前脚本: ${preAnalysisScript}`);
     const preAnalysis = await runnerDeps.runPreAnalysisScript(preAnalysisScript, config.repoPath);
-    if (preAnalysis.stdout) console.log(`[runner] 分析前脚本 stdout: ${preAnalysis.stdout.slice(0, 500)}`);
-    if (preAnalysis.stderr) console.log(`[runner] 分析前脚本 stderr: ${preAnalysis.stderr.slice(0, 500)}`);
+    if (preAnalysis.stdout) log("runner", `分析前脚本 stdout: ${preAnalysis.stdout.slice(0, 500)}`);
+    if (preAnalysis.stderr) error("runner", `分析前脚本 stderr: ${preAnalysis.stderr.slice(0, 500)}`);
     if (preAnalysis.exitCode !== 0) {
       await unlink(promptFile);
       return {
@@ -152,7 +153,7 @@ export async function runClaudeAnalysis(
   );
 
   const timeout = runnerDeps.setTimeoutFn(() => {
-    console.log(`[runner] 分析超时 (${config.timeoutSeconds}s), 正在终止进程`);
+    log("runner", `分析超时 (${config.timeoutSeconds}s), 正在终止进程`);
     proc.kill();
   }, config.timeoutSeconds * 1000);
 
@@ -169,7 +170,7 @@ export async function runClaudeAnalysis(
   await unlink(promptFile);
 
   if (exitCode === 124 || exitCode === null) {
-    console.log("[runner] 分析超时或被终止");
+    error("runner", "分析超时或被终止");
     return {
       result: { status: "failed", summary: "分析超时", reason: `超时限制 ${config.timeoutSeconds}s`, files: [] },
       logPath,
@@ -177,8 +178,8 @@ export async function runClaudeAnalysis(
   }
 
   if (exitCode !== 0) {
-    console.log(`[runner] Claude CLI 退出码: ${exitCode}`);
-    console.log(`[runner] stderr: ${stderr.slice(0, 500)}`);
+    error("runner", `Claude CLI 退出码: ${exitCode}`);
+    error("runner", `stderr: ${stderr.slice(0, 500)}`);
     return {
       result: { status: "failed", summary: `Claude CLI 异常退出 (${exitCode})`, reason: stderr.slice(0, 500), files: [] },
       logPath,
@@ -186,6 +187,6 @@ export async function runClaudeAnalysis(
   }
 
   const result = extractResult(stdout);
-  console.log(`[runner] 分析完成, status=${result.status}`);
+  log("runner", `分析完成, status=${result.status}`);
   return { result, logPath };
 }

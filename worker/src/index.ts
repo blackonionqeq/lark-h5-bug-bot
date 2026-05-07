@@ -3,19 +3,20 @@ import { createCloudTaskApi } from "./poller";
 import { reportToCallback } from "./reporter";
 import { triage } from "./triage";
 import { runClaudeAnalysis } from "./runner";
+import { error, log } from "./logger";
 
 const config = getConfig();
 const api = createCloudTaskApi(config.cloudUrl, config.agentApiToken);
 
-console.log("=== Bug 分析 Worker 启动 ===");
-console.log(`云端地址: ${config.cloudUrl}`);
-console.log(`分析仓库: ${config.repoPath}`);
-console.log(`日志目录: ${config.logDir}`);
-console.log(`轮询间隔: ${config.pollIntervalMs}ms`);
-console.log(`模型: ${config.claudeModel}`);
-console.log(`Claude CLI: ${config.claudeExecutable}`);
-console.log(`分析前脚本: ${config.preAnalysisScript}`);
-console.log(`超时: ${config.timeoutSeconds}s / 最多 ${config.maxTurns} turns`);
+log("worker", "=== Bug 分析 Worker 启动 ===");
+log("worker", `云端地址: ${config.cloudUrl}`);
+log("worker", `分析仓库: ${config.repoPath}`);
+log("worker", `日志目录: ${config.logDir}`);
+log("worker", `轮询间隔: ${config.pollIntervalMs}ms`);
+log("worker", `模型: ${config.claudeModel}`);
+log("worker", `Claude CLI: ${config.claudeExecutable}`);
+log("worker", `分析前脚本: ${config.preAnalysisScript}`);
+log("worker", `超时: ${config.timeoutSeconds}s / 最多 ${config.maxTurns} turns`);
 
 let running = false;
 
@@ -27,15 +28,15 @@ async function processOneTask(): Promise<void> {
     // 1. 拉取并认领任务
     const task = await api.fetchPending();
     if (!task) {
-      console.log(`[worker] 无待处理任务, ${new Date().toISOString()}`);
+      log("worker", "无待处理任务");
       return;
     }
 
-    console.log(`[worker] 认领任务: ${task.taskId}, issueId: ${task.issueId ?? "N/A"}`);
+    log("worker", `认领任务: ${task.taskId}, issueId: ${task.issueId ?? "N/A"}`);
 
     // 2. 分诊
     const triageResult = triage(task.title, task.description);
-    console.log(`[worker] 分诊结果: ${triageResult.label} — ${triageResult.reason}`);
+    log("worker", `分诊结果: ${triageResult.label} — ${triageResult.reason}`);
 
     // 3. 提交分诊中间状态
     await api.submitResult(task.taskId, {
@@ -44,7 +45,7 @@ async function processOneTask(): Promise<void> {
     });
 
     if (triageResult.label === "non-frontend") {
-      console.log(`[worker] 非前端 bug，跳过分析`);
+      log("worker", "非前端 bug，跳过分析");
       await reportToCallback(config.cloudUrl, task, triageResult, {
         status: "skipped",
         summary: "非前端问题，已跳过",
@@ -71,8 +72,8 @@ async function processOneTask(): Promise<void> {
       config
     );
 
-    console.log(`[worker] 分析结果: ${analysisResult.status} — ${analysisResult.summary}`);
-    console.log(`[worker] 日志: ${logPath}`);
+    log("worker", `分析结果: ${analysisResult.status} — ${analysisResult.summary}`);
+    log("worker", `日志: ${logPath}`);
 
     // 5. 回调云端
     await reportToCallback(config.cloudUrl, task, triageResult, analysisResult);
@@ -83,9 +84,9 @@ async function processOneTask(): Promise<void> {
       analysisResult,
     });
 
-    console.log(`[worker] 任务完成: ${task.taskId}`);
+    log("worker", `任务完成: ${task.taskId}`);
   } catch (err) {
-    console.error("[worker] 处理任务出错:", (err as Error).message);
+    error("worker", `处理任务出错: ${(err as Error).message}`);
   } finally {
     running = false;
   }
@@ -96,18 +97,18 @@ setInterval(async () => {
   try {
     await processOneTask();
   } catch (err) {
-    console.error("[worker] 主循环异常:", (err as Error).message);
+    error("worker", `主循环异常: ${(err as Error).message}`);
     running = false;
   }
 }, config.pollIntervalMs);
 
 // Graceful shutdown
 process.on("SIGINT", () => {
-  console.log("\n[worker] 收到 SIGINT，正在退出...");
+  log("worker", "收到 SIGINT，正在退出...");
   process.exit(0);
 });
 
 process.on("SIGTERM", () => {
-  console.log("\n[worker] 收到 SIGTERM，正在退出...");
+  log("worker", "收到 SIGTERM，正在退出...");
   process.exit(0);
 });
