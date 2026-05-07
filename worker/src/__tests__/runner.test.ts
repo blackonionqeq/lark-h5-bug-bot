@@ -184,7 +184,7 @@ describe("runClaudeAnalysis", () => {
     const config = makeWorkerConfig({
       logDir,
       timeoutSeconds: 5,
-      preAnalysisScript: "../worker/scripts/pre-analysis.sh",
+      preAnalysisScript: "./scripts/pre-analysis.sh",
     });
     const runPreAnalysisScript = mock(async () => ({ exitCode: 0, stdout: "pulled", stderr: "" }));
     const spawn = mock(() => ({
@@ -207,7 +207,7 @@ describe("runClaudeAnalysis", () => {
       }
     );
 
-    expect(runPreAnalysisScript).toHaveBeenCalledWith("../worker/scripts/pre-analysis.sh", config.repoPath);
+    expect(runPreAnalysisScript).toHaveBeenCalledWith(expect.stringContaining("/worker/scripts/pre-analysis.sh"), config.repoPath);
     expect(spawn).toHaveBeenCalledTimes(1);
   });
 
@@ -217,7 +217,7 @@ describe("runClaudeAnalysis", () => {
     const config = makeWorkerConfig({
       logDir,
       timeoutSeconds: 5,
-      preAnalysisScript: "../worker/scripts/pre-analysis.sh",
+      preAnalysisScript: "./scripts/pre-analysis.sh",
     });
     const spawn = mock(() => ({
       exited: Promise.resolve(0),

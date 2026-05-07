@@ -95,8 +95,8 @@ CLOUD_URL=https://your-domain.com
 REPO_PATH=/path/to/frontend-repo
 LOG_DIR=./logs
 POLL_INTERVAL_MS=20000
-TIMEOUT_SECONDS=300
-MAX_TURNS=20
+TIMEOUT_SECONDS=600
+MAX_TURNS=40
 CLAUDE_MODEL=sonnet
 CLAUDE_EXECUTABLE=claude
 PRE_ANALYSIS_SCRIPT=./scripts/pre-analysis.sh
@@ -114,11 +114,11 @@ PRE_ANALYSIS_SCRIPT=./scripts/pre-analysis.sh
 | `AGENT_API_TOKEN` | Worker 必需 | 同上，Worker 用于请求云端 |
 | `LOG_DIR` | 可选 | Worker 日志目录，默认 `./logs` |
 | `POLL_INTERVAL_MS` | 可选 | 轮询间隔（ms），默认 `20000` |
-| `TIMEOUT_SECONDS` | 可选 | Claude Code 超时（秒），默认 `300` |
-| `MAX_TURNS` | 可选 | Claude Code 最大 turn 数，默认 `20` |
+| `TIMEOUT_SECONDS` | 可选 | Claude Code 超时（秒），默认 `600` |
+| `MAX_TURNS` | 可选 | Claude Code 最大 turn 数，默认 `40` |
 | `CLAUDE_MODEL` | 可选 | 使用的模型，默认 `sonnet` |
 | `CLAUDE_EXECUTABLE` | 可选 | Claude Code CLI 可执行文件名或绝对路径，默认 `claude` |
-| `PRE_ANALYSIS_SCRIPT` | 可选 | 分析前执行的脚本，默认 `./scripts/pre-analysis.sh`，从 `worker/` 目录启动时使用该默认值 |
+| `PRE_ANALYSIS_SCRIPT` | 可选 | 分析前执行的脚本，默认 `./scripts/pre-analysis.sh`；相对路径按 `worker/` 目录解析，脚本执行时的工作目录仍是 `REPO_PATH` |
 
 ---
 

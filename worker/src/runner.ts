@@ -1,6 +1,6 @@
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { WorkerConfig } from "./config";
 import type { AnalysisResult } from "../../code/src/types";
@@ -62,6 +62,11 @@ async function buildPrompt(title: string, description: string): Promise<string> 
   return template.replace("{title}", title).replace("{description}", description);
 }
 
+function resolveWorkerPath(path: string): string {
+  if (isAbsolute(path)) return path;
+  return resolve(fileURLToPath(new URL("..", import.meta.url)), path);
+}
+
 export function extractResult(jsonl: string): AnalysisResult {
   const lines = jsonl.trim().split("\n");
   for (let i = lines.length - 1; i >= 0; i--) {
@@ -118,8 +123,9 @@ export async function runClaudeAnalysis(
   console.log(`[runner] 工作目录: ${config.repoPath}`);
   console.log(`[runner] 日志文件: ${logPath}`);
   if (config.preAnalysisScript) {
-    console.log(`[runner] 执行分析前脚本: ${config.preAnalysisScript}`);
-    const preAnalysis = await runnerDeps.runPreAnalysisScript(config.preAnalysisScript, config.repoPath);
+    const preAnalysisScript = resolveWorkerPath(config.preAnalysisScript);
+    console.log(`[runner] 执行分析前脚本: ${preAnalysisScript}`);
+    const preAnalysis = await runnerDeps.runPreAnalysisScript(preAnalysisScript, config.repoPath);
     if (preAnalysis.stdout) console.log(`[runner] 分析前脚本 stdout: ${preAnalysis.stdout.slice(0, 500)}`);
     if (preAnalysis.stderr) console.log(`[runner] 分析前脚本 stderr: ${preAnalysis.stderr.slice(0, 500)}`);
     if (preAnalysis.exitCode !== 0) {

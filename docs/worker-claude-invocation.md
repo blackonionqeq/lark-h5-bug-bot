@@ -87,9 +87,9 @@ rm -f "$PROMPT_FILE"
 ## 3. CLI 参数
 
 ```bash
-timeout 300 "${CLAUDE_EXECUTABLE:-claude}" -p "$(cat "$PROMPT_FILE")" \
+timeout 600 "${CLAUDE_EXECUTABLE:-claude}" -p "$(cat "$PROMPT_FILE")" \
   --output-format stream-json \
-  --max-turns 20 \
+  --max-turns 40 \
   --model sonnet
 ```
 
@@ -98,9 +98,9 @@ timeout 300 "${CLAUDE_EXECUTABLE:-claude}" -p "$(cat "$PROMPT_FILE")" \
 | 参数 | 值 | 说明 |
 |---|---|---|
 | `--output-format` | `stream-json` | JSONL 事件流，兼顾结果解析和审计（见 §4） |
-| `--max-turns` | `20` | 分析一个 bug 通常 10-15 turn，20 留有余量且防止失控 |
+| `--max-turns` | `40` | 面向 h5_1v1 这类真实前端仓库，给搜索、追调用链和验证结论留足余量，同时防止失控 |
 | `--model` | `sonnet` | 性价比优先；可按需切换为 `opus`（更强分析能力） |
-| `timeout` | `300`（5 分钟） | 外部超时兜底，Claude CLI 自身无超时参数 |
+| `timeout` | `600`（10 分钟） | 外部超时兜底，Claude CLI 自身无超时参数 |
 
 其中 `CLAUDE_EXECUTABLE` 可选，默认值为 `claude`；当 Worker 运行在 pm2、launchd 或其他拿不到交互 shell `PATH` 的环境时，建议显式配置为 Claude Code CLI 的绝对路径。
 
@@ -128,7 +128,7 @@ timeout 300 "${CLAUDE_EXECUTABLE:-claude}" -p "$(cat "$PROMPT_FILE")" \
 
 ```bash
 LOG_FILE="${LOG_DIR}/${TASK_ID}.jsonl"
-timeout 300 "${CLAUDE_EXECUTABLE:-claude}" -p "..." --output-format stream-json > "$LOG_FILE" 2>&1
+timeout 600 "${CLAUDE_EXECUTABLE:-claude}" -p "..." --output-format stream-json > "$LOG_FILE" 2>&1
 ```
 
 日志内容包含：
@@ -211,9 +211,9 @@ PROMPT_EOF
 
 # --- 执行分析 ---
 cd "$REPO_PATH"
-timeout 300 "$CLAUDE_EXECUTABLE" -p "$(cat "$PROMPT_FILE")" \
+timeout 600 "$CLAUDE_EXECUTABLE" -p "$(cat "$PROMPT_FILE")" \
   --output-format stream-json \
-  --max-turns 20 \
+  --max-turns 40 \
   --model sonnet \
   > "$LOG_FILE" 2>&1
 
