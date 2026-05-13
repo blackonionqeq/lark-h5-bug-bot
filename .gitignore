@@ -37,3 +37,6 @@ tempnpm-cache
 
 #claude
 .claude/settings.local.json
+
+# local ops notes
+PM2_RESTART_NOTES.local.md
