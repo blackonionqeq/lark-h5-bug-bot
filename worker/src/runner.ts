@@ -75,6 +75,14 @@ export function extractResult(jsonl: string): AnalysisResult {
       const event = JSON.parse(lines[i]);
       if (event.type === "result") {
         const text: string = event.result ?? "";
+        if (!text.trim()) {
+          return {
+            status: "failed",
+            summary: "分析结果为空，请检查模型唤起是否异常",
+            reason: "Claude CLI 返回了空结果，未产出任何分析文本；请检查模型服务、CLI 调用链路或鉴权状态。",
+            files: [],
+          };
+        }
         // Try to extract JSON from the result text
         const jsonMatch = text.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
@@ -86,7 +94,12 @@ export function extractResult(jsonl: string): AnalysisResult {
             files: parsed.files ?? [],
           };
         }
-        return { status: "failed", summary: "无法解析分析结果", reason: text.slice(0, 500), files: [] };
+        return {
+          status: "failed",
+          summary: "分析结果格式不正确",
+          reason: `Claude CLI 已返回文本，但未输出约定的 JSON 对象。原始输出片段: ${text.slice(0, 500)}`,
+          files: [],
+        };
       }
     } catch {
       // skip unparseable lines

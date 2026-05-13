@@ -119,7 +119,20 @@ describe("extractResult", () => {
 
     const result = extractResult(jsonl);
     expect(result.status).toBe("failed");
-    expect(result.summary).toBe("无法解析分析结果");
+    expect(result.summary).toBe("分析结果格式不正确");
+    expect(result.reason).toContain("原始输出片段");
+  });
+
+  it("returns failed with model invocation hint when result is empty", () => {
+    const jsonl = JSON.stringify({
+      type: "result",
+      result: "",
+    }) + "\n";
+
+    const result = extractResult(jsonl);
+    expect(result.status).toBe("failed");
+    expect(result.summary).toBe("分析结果为空，请检查模型唤起是否异常");
+    expect(result.reason).toContain("Claude CLI 返回了空结果");
   });
 
   it("returns failed for empty input", () => {

@@ -269,10 +269,16 @@ Source: `worker/src/index.ts:72-73`
 
 The `logPath` file contains Claude's raw `stream-json` output. This is the most useful file when you need to inspect what Claude actually returned.
 
-If the CLI ran but the final result cannot be parsed, the task may end with a failed result such as:
+If the CLI ran but returned an empty result, the task may end with a failed result such as:
 
 ```txt
-[worker] 分析结果: failed — 无法解析分析结果
+[worker] 分析结果: failed — 分析结果为空，请检查模型唤起是否异常
+```
+
+If the CLI returned text but not the required JSON object, the task may end with:
+
+```txt
+[worker] 分析结果: failed — 分析结果格式不正确
 ```
 
 ### 6. Callback to cloud
@@ -323,7 +329,7 @@ Source: `worker/src/index.ts:84`
   - check whether triage classified it as `non-frontend`
 - Runner starts but exits non-zero:
   - inspect CLI stderr and local Claude auth/runtime
-- Result is `failed` with parse error:
+- Result is `failed` with empty-result or parse-format error:
   - inspect the worker log file under `LOG_DIR`
 - Callback fails:
   - check cloud service health and `/callback/analysis-result`
