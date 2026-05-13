@@ -3,6 +3,7 @@ export type EventSource = "zentao" | "bugbot-callback" | "local";
 export type EventType =
   | "zentao.webhook.received"
   | "analysis.result.received"
+  | "analysis.task.running"
   | "local.manual.requested";
 
 export interface EventMeta {
@@ -64,6 +65,15 @@ export interface AnalysisCallbackPayload extends Record<string, unknown> {
   files?: string[];
 }
 
+export interface AnalysisProgressPayload extends Record<string, unknown> {
+  taskId?: string;
+  issueId?: string | number;
+  traceId?: string;
+  title?: string;
+  triageLabel?: string;
+  triageSource?: string;
+}
+
 export interface AnalysisTask {
   taskId: string;
   traceId: string;
@@ -73,6 +83,7 @@ export interface AnalysisTask {
   status: "queued" | "claimed" | "running" | "completed" | "failed";
   triageResult?: TriageResult;
   analysisResult?: AnalysisResult;
+  startedNotifiedAt?: string;
   createdAt: string;
   updatedAt: string;
 }

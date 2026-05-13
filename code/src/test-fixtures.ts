@@ -15,6 +15,7 @@ export function makeAppConfig(overrides?: Partial<AppConfig>): AppConfig {
     appSecret: "test-app-secret",
     chatID: "test-chat-id",
     port: 3000,
+    agentApiToken: "test-agent-token",
     userMentions: {},
     ...overrides,
   };

@@ -1,10 +1,27 @@
-import type { AppEvent, AnalysisCallbackPayload, ZentaoParsedFields } from "../types";
+import type {
+  AppEvent,
+  AnalysisCallbackPayload,
+  AnalysisProgressPayload,
+  ZentaoParsedFields,
+} from "../types";
 
 function stringifyPayload(payload: unknown): string {
   return JSON.stringify(payload, null, 2);
 }
 
 export function formatMessage(event: AppEvent, userMentions?: Record<string, string>): string {
+  if (event.type === "analysis.task.running") {
+    const p = event.payload as AnalysisProgressPayload;
+    const lines: string[] = [];
+    lines.push("⏳ 自动查 bug 已开始");
+    if (event.meta.issueId) lines.push(`Issue: ${event.meta.issueId}`);
+    if (p.title) lines.push(`标题: ${p.title}`);
+    if (p.triageLabel) lines.push(`分诊: ${p.triageLabel} (${p.triageSource ?? "unknown"})`);
+    lines.push("进度: 已判定为前端问题，开始自动排查，预计 5～8 分钟输出结果。");
+
+    return lines.join("\n\n");
+  }
+
   if (event.type === "analysis.result.received") {
     const p = event.payload as AnalysisCallbackPayload;
     const statusEmoji: Record<string, string> = {

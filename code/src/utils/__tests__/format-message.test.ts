@@ -122,6 +122,31 @@ describe("formatMessage", () => {
     });
   });
 
+  describe("analysis.task.running", () => {
+    it("formats running analysis notification", () => {
+      const event = makeAppEvent({
+        type: "analysis.task.running",
+        source: "local",
+        payload: {
+          taskId: "task-001",
+          issueId: "BUG-100",
+          traceId: "trace-001",
+          title: "页面白屏报错",
+          triageLabel: "frontend",
+          triageSource: "rules",
+        },
+        meta: { issueId: "BUG-100", taskId: "task-001", traceId: "trace-001" },
+      });
+
+      const result = formatMessage(event);
+      expect(result).toContain("自动查 bug 已开始");
+      expect(result).toContain("BUG-100");
+      expect(result).toContain("页面白屏报错");
+      expect(result).toContain("frontend");
+      expect(result).toContain("预计 5～8 分钟输出结果");
+    });
+  });
+
   describe("unknown event type", () => {
     it("falls back to JSON stringify of payload", () => {
       const event = makeAppEvent({

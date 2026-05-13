@@ -9,7 +9,7 @@ const config = getConfig();
 const app = new Elysia({ name: "lark-h5-bug-bot" })
   .use(createZentaoRouter(config))
   .use(createAnalysisCallbackRouter(config))
-  .use(createAgentTasksRouter(config.agentApiToken ?? ""))
+  .use(createAgentTasksRouter(config))
   .listen(config.port);
 
 console.log("飞书机器人服务已启动，等待事件触发...");
