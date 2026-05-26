@@ -66,9 +66,9 @@ spyOn(globalThis, "fetch").mockImplementation(() =>
 );
 ```
 
-### Claude CLI (runner)
+### Agent CLI (runner)
 
-`runClaudeAnalysis()` accepts an optional `deps` argument so tests can stub the process boundary without replacing filesystem behavior globally. Prefer overriding `spawn` and timer functions there:
+`runClaudeAnalysis()` remains as a compatibility alias for `runAgentAnalysis()`. It accepts an optional `deps` argument so tests can stub the process boundary without replacing filesystem behavior globally. Prefer overriding `spawn` and timer functions there:
 
 ```ts
 import { mock } from "bun:test";
@@ -90,8 +90,10 @@ await runClaudeAnalysis("title", "desc", "task-1", makeWorkerConfig(), {
 Current runner tests cover:
 
 - successful execution with parsed JSONL result and log write
-- non-zero exit with stderr capture
-- non-zero exit with stderr-only output
+- Claude non-zero exit with Codex fallback
+- Claude parse failure with Codex fallback
+- combined failure when both Claude and Codex fail
+- non-zero exit with stderr-only output when fallback is disabled
 - timeout-triggered process kill
 
 ## Runtime logs and troubleshooting
@@ -139,7 +141,7 @@ Then copy and execute the `sudo ...` command printed by PM2, and save the curren
 There is currently no application-side log rotation.
 
 - PM2 captures stdout/stderr under `~/.pm2/logs/`.
-- Claude raw `stream-json` output is written per task under `LOG_DIR` as `<taskId>.jsonl`.
+- Agent raw JSONL output is written per task under `LOG_DIR` as `<taskId>-claude.jsonl` and, when fallback runs, `<taskId>-codex.jsonl`.
 - `LOG_DIR` defaults to `./logs` relative to `worker/` unless overridden in `.env`.
 
 If PM2 logs need rotation, install and configure PM2's logrotate module:
@@ -167,11 +169,14 @@ When the worker starts, it prints the basic config:
 分析仓库: ...
 日志目录: ...
 轮询间隔: ...
-模型: ...
+Claude 模型: ...
+Claude CLI: ...
+Codex fallback: enabled|disabled
+Codex CLI: ...
 超时: ...
 ```
 
-Source: `worker/src/index.ts:10-16`
+Source: `worker/src/index.ts:10-20`
 
 If these lines do not appear, the worker process did not start successfully.
 
@@ -222,21 +227,20 @@ or:
 
 Source: `worker/src/index.ts:35-45`
 
-If a bug is classified as `non-frontend`, Claude analysis will be skipped.
+If a bug is classified as `non-frontend`, agent analysis will be skipped.
 
-### 4. Claude analysis stage
+### 4. Agent analysis stage
 
-When Claude analysis starts, the runner prints:
+When analysis starts, the runner prints:
 
 ```txt
 [runner] 启动分析, taskId=...
 [runner] 工作目录: ...
-[runner] 日志文件: ...
+[runner] 启动 claude 分析, taskId=...
+[runner] claude 日志文件: ...
 ```
 
-Source: `worker/src/runner.ts:97-99`
-
-This means the task has passed triage and the worker is invoking Claude Code CLI.
+This means the task has passed triage and the worker is invoking Claude Code CLI first.
 
 If Claude exits abnormally, the worker prints:
 
@@ -245,16 +249,20 @@ If Claude exits abnormally, the worker prints:
 [runner] stderr: ...
 ```
 
-Source: `worker/src/runner.ts:135-139`
+If Codex fallback is enabled, the worker then prints:
+
+```txt
+[runner] Claude 分析失败，尝试 Codex fallback: ...
+[runner] 启动 codex 分析, taskId=...
+[runner] codex 日志文件: ...
+```
 
 If Claude times out, the worker prints:
 
 ```txt
-[runner] 分析超时 (...s), 正在终止进程
-[runner] 分析超时或被终止
+[runner] claude 分析超时 (...s), 正在终止进程
+[runner] claude 分析超时或被终止
 ```
-
-Source: `worker/src/runner.ts:110-113`, `worker/src/runner.ts:127-132`
 
 ### 5. Analysis result and log file
 
@@ -267,7 +275,7 @@ When analysis finishes, the worker prints:
 
 Source: `worker/src/index.ts:72-73`
 
-The `logPath` file contains Claude's raw `stream-json` output. This is the most useful file when you need to inspect what Claude actually returned.
+The `logPath` file contains the raw JSONL output for the provider that produced the returned result. If fallback ran, inspect both `<taskId>-claude.jsonl` and `<taskId>-codex.jsonl` under `LOG_DIR`.
 
 If the CLI ran but returned an empty result, the task may end with a failed result such as:
 
@@ -328,8 +336,8 @@ Source: `worker/src/index.ts:84`
 - Task is claimed but no runner logs appear:
   - check whether triage classified it as `non-frontend`
 - Runner starts but exits non-zero:
-  - inspect CLI stderr and local Claude auth/runtime
+  - inspect CLI stderr and local Claude/Codex auth/runtime
 - Result is `failed` with empty-result or parse-format error:
-  - inspect the worker log file under `LOG_DIR`
+  - inspect the worker JSONL files under `LOG_DIR`
 - Callback fails:
   - check cloud service health and `/callback/analysis-result`

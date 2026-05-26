@@ -99,6 +99,10 @@ TIMEOUT_SECONDS=600
 MAX_TURNS=40
 CLAUDE_MODEL=sonnet
 CLAUDE_EXECUTABLE=claude
+ENABLE_CODEX_FALLBACK=true
+CODEX_EXECUTABLE=codex
+CODEX_MODEL=
+CODEX_SANDBOX=read-only
 PRE_ANALYSIS_SCRIPT=./scripts/pre-analysis.sh
 ```
 
@@ -114,10 +118,14 @@ PRE_ANALYSIS_SCRIPT=./scripts/pre-analysis.sh
 | `AGENT_API_TOKEN` | Worker 必需 | 同上，Worker 用于请求云端 |
 | `LOG_DIR` | 可选 | Worker 日志目录，默认 `./logs` |
 | `POLL_INTERVAL_MS` | 可选 | 轮询间隔（ms），默认 `20000` |
-| `TIMEOUT_SECONDS` | 可选 | Claude Code 超时（秒），默认 `600` |
+| `TIMEOUT_SECONDS` | 可选 | 单次 Agent CLI 超时（秒），默认 `600` |
 | `MAX_TURNS` | 可选 | Claude Code 最大 turn 数，默认 `40` |
-| `CLAUDE_MODEL` | 可选 | 使用的模型，默认 `sonnet` |
+| `CLAUDE_MODEL` | 可选 | Claude Code 使用的模型，默认 `sonnet` |
 | `CLAUDE_EXECUTABLE` | 可选 | Claude Code CLI 可执行文件名或绝对路径，默认 `claude` |
+| `ENABLE_CODEX_FALLBACK` | 可选 | Claude Code 失败时是否尝试 Codex 无头模式，默认 `true`；设为 `false` 可关闭 |
+| `CODEX_EXECUTABLE` | 可选 | Codex CLI 可执行文件名或绝对路径，默认 `codex` |
+| `CODEX_MODEL` | 可选 | Codex CLI 使用的模型；为空时使用 Codex 默认配置 |
+| `CODEX_SANDBOX` | 可选 | Codex exec sandbox，默认 `read-only` |
 | `PRE_ANALYSIS_SCRIPT` | 可选 | 分析前执行的脚本，默认 `./scripts/pre-analysis.sh`；相对路径按 `worker/` 目录解析，脚本执行时的工作目录仍是 `REPO_PATH` |
 
 ---
@@ -137,6 +145,8 @@ pnpm typecheck    # 类型检查
 ### 本地 Worker
 
 Worker 需要本机安装 Claude Code CLI，并且 `REPO_PATH` 指向的前端项目已 clone。默认通过 `PATH` 查找 `claude`；如果后台进程环境拿不到该命令，可通过 `CLAUDE_EXECUTABLE` 显式指定可执行文件名或绝对路径。
+
+如果启用 Codex fallback，Worker 还需要安装并认证 Codex CLI。Claude Code 进程异常、超时、或 JSONL 结果不可解析时，Worker 会继续用 `codex exec --json` 无头模式分析；Claude 正常返回 `suspected`、`resolved` 或 `inconclusive` 时不会 fallback。
 
 ```bash
 cd worker
@@ -237,7 +247,8 @@ scp lark-h5-bug-bot.tar.gz your-user@your-server:/opt/
 2. Worker 和云端可以部署在不同机器上，Worker 只需能访问云端的 HTTP 地址。
 3. Worker 通过出站 HTTPS 请求拉取任务，不需要内网穿透。
 4. Claude Code CLI 需要在 Worker 机器上安装并完成认证；若 pm2 或其他后台环境拿不到 `claude`，请设置 `CLAUDE_EXECUTABLE`。
-5. 分诊为规则策略，默认将不确定的 bug 归类为前端，后续可按日志数据决定是否引入 LLM 分诊。
+5. 启用 Codex fallback 时，Codex CLI 也需要在 Worker 机器上安装并完成认证；若后台环境拿不到 `codex`，请设置 `CODEX_EXECUTABLE`。
+6. 分诊为规则策略，默认将不确定的 bug 归类为前端，后续可按日志数据决定是否引入 LLM 分诊。
 
 ---
 

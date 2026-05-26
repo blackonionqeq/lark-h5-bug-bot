@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, access } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it, expect, afterEach, mock } from "bun:test";
-import { extractResult, runClaudeAnalysis } from "../runner";
+import { extractCodexResult, extractResult, runClaudeAnalysis } from "../runner";
 import { makeWorkerConfig } from "../test-fixtures";
 
 function streamFromText(text: string): ReadableStream<Uint8Array> {
@@ -25,6 +25,10 @@ async function pathExists(path: string): Promise<boolean> {
 
 function resultEvent(json: string): string {
   return JSON.stringify({ type: "result", result: json }) + "\n";
+}
+
+function codexMessageEvent(text: string): string {
+  return JSON.stringify({ type: "item.completed", item: { id: "item_0", type: "agent_message", text } }) + "\n";
 }
 
 describe("extractResult", () => {
@@ -141,6 +145,39 @@ describe("extractResult", () => {
   });
 });
 
+describe("extractCodexResult", () => {
+  it("extracts result from Codex agent_message JSONL", () => {
+    const jsonl = [
+      JSON.stringify({ type: "thread.started", thread_id: "thread-1" }),
+      JSON.stringify({ type: "turn.started" }),
+      codexMessageEvent(JSON.stringify({ status: "resolved", summary: "codex done", reason: "found it", files: ["src/b.ts"] })),
+      JSON.stringify({ type: "turn.completed" }),
+    ].join("\n");
+
+    const result = extractCodexResult(jsonl);
+    expect(result.status).toBe("resolved");
+    expect(result.summary).toBe("codex done");
+    expect(result.files).toEqual(["src/b.ts"]);
+  });
+
+  it("returns last Codex agent message when multiple exist", () => {
+    const jsonl = [
+      codexMessageEvent(JSON.stringify({ status: "suspected", summary: "first" })),
+      codexMessageEvent(JSON.stringify({ status: "resolved", summary: "second" })),
+    ].join("\n");
+
+    const result = extractCodexResult(jsonl);
+    expect(result.status).toBe("resolved");
+    expect(result.summary).toBe("second");
+  });
+
+  it("returns failed when no Codex agent message exists", () => {
+    const result = extractCodexResult(JSON.stringify({ type: "turn.completed" }));
+    expect(result.status).toBe("failed");
+    expect(result.reason).toContain("Codex agent_message");
+  });
+});
+
 describe("runClaudeAnalysis", () => {
   const createdLogDirs: string[] = [];
 
@@ -185,7 +222,7 @@ describe("runClaudeAnalysis", () => {
     expect(command?.[0]).toBe("claude");
     expect(result.status).toBe("resolved");
     expect(result.summary).toBe("done");
-    expect(logPath).toBe(join(logDir, `${taskId}.jsonl`));
+    expect(logPath).toBe(join(logDir, `${taskId}-claude.jsonl`));
     expect(await readFile(logPath, "utf-8")).toContain('"type":"result"');
     expect(clearTimeoutFn).toHaveBeenCalledWith(timeoutHandle);
     expect(await pathExists(join(tmpdir(), `${taskId}-prompt.txt`))).toBe(false);
@@ -292,10 +329,11 @@ describe("runClaudeAnalysis", () => {
     expect(command?.[0]).toBe("/opt/homebrew/bin/claude");
   });
 
-  it("returns failed result when claude exits with non-zero code", async () => {
+  it("falls back to Codex when claude exits with non-zero code", async () => {
     const taskId = `runner-exit-${crypto.randomUUID()}`;
     const logDir = await createLogDir();
     const config = makeWorkerConfig({ logDir, timeoutSeconds: 5 });
+    const commands: string[][] = [];
 
     const { result, logPath } = await runClaudeAnalysis(
       "接口报错",
@@ -303,27 +341,41 @@ describe("runClaudeAnalysis", () => {
       taskId,
       config,
       {
-        spawn: () => ({
-          exited: Promise.resolve(2),
-          stdout: streamFromText("partial output"),
-          stderr: streamFromText("fatal error"),
-          kill: mock(() => {}),
-        }),
+        spawn: (command) => {
+          commands.push(command);
+          if (command[0] === "claude") {
+            return {
+              exited: Promise.resolve(2),
+              stdout: streamFromText("partial output"),
+              stderr: streamFromText("fatal error"),
+              kill: mock(() => {}),
+            };
+          }
+          return {
+            exited: Promise.resolve(0),
+            stdout: streamFromText(codexMessageEvent(JSON.stringify({ status: "resolved", summary: "codex recovered", reason: "fallback worked", files: [] }))),
+            stderr: streamFromText(""),
+            kill: mock(() => {}),
+          };
+        },
         setTimeoutFn: () => ({ id: "timeout-2" }),
         clearTimeoutFn: mock(() => {}),
       }
     );
 
-    expect(result.status).toBe("failed");
-    expect(result.summary).toContain("2");
-    expect(result.reason).toContain("fatal error");
-    expect(await readFile(logPath, "utf-8")).toBe("partial output");
+    expect(commands).toHaveLength(2);
+    expect(commands[1]?.slice(0, 4)).toEqual(["codex", "--ask-for-approval", "never", "exec"]);
+    expect(commands[1]?.at(-1)).toContain(".codex/agents/bug-investigator.md");
+    expect(result.status).toBe("resolved");
+    expect(result.summary).toBe("codex recovered");
+    expect(logPath).toBe(join(logDir, `${taskId}-codex.jsonl`));
+    expect(await readFile(join(logDir, `${taskId}-claude.jsonl`), "utf-8")).toBe("partial output");
   });
 
-  it("returns stderr content when claude exits with error and stdout is empty", async () => {
+  it("returns stderr content when claude exits with error and Codex fallback is disabled", async () => {
     const taskId = `runner-stderr-only-${crypto.randomUUID()}`;
     const logDir = await createLogDir();
-    const config = makeWorkerConfig({ logDir, timeoutSeconds: 5 });
+    const config = makeWorkerConfig({ logDir, timeoutSeconds: 5, enableCodexFallback: false });
 
     const { result, logPath } = await runClaudeAnalysis(
       "命令异常",
@@ -348,10 +400,132 @@ describe("runClaudeAnalysis", () => {
     expect(await readFile(logPath, "utf-8")).toBe("");
   });
 
-  it("kills the process and returns timeout result when timer fires", async () => {
+  it("falls back to Codex when Claude JSONL cannot be parsed", async () => {
+    const taskId = `runner-parse-fallback-${crypto.randomUUID()}`;
+    const logDir = await createLogDir();
+    const config = makeWorkerConfig({ logDir, timeoutSeconds: 5 });
+    const commands: string[][] = [];
+
+    const { result } = await runClaudeAnalysis(
+      "格式异常",
+      "Claude 没有 result 事件",
+      taskId,
+      config,
+      {
+        spawn: (command) => {
+          commands.push(command);
+          if (command[0] === "claude") {
+            return {
+              exited: Promise.resolve(0),
+              stdout: streamFromText(JSON.stringify({ type: "assistant", text: "hello" })),
+              stderr: streamFromText(""),
+              kill: mock(() => {}),
+            };
+          }
+          return {
+            exited: Promise.resolve(0),
+            stdout: streamFromText(codexMessageEvent(JSON.stringify({ status: "suspected", summary: "codex parsed", reason: "fallback parse", files: ["src/c.ts"] }))),
+            stderr: streamFromText(""),
+            kill: mock(() => {}),
+          };
+        },
+        setTimeoutFn: () => ({ id: "timeout-parse-fallback" }),
+        clearTimeoutFn: mock(() => {}),
+      }
+    );
+
+    expect(commands.map((command) => command[0])).toEqual(["claude", "codex"]);
+    expect(result.status).toBe("suspected");
+    expect(result.summary).toBe("codex parsed");
+  });
+
+  it("returns combined failure when Claude and Codex both fail", async () => {
+    const taskId = `runner-both-fail-${crypto.randomUUID()}`;
+    const logDir = await createLogDir();
+    const config = makeWorkerConfig({ logDir, timeoutSeconds: 5 });
+
+    const { result, logPath } = await runClaudeAnalysis(
+      "双失败",
+      "两个 CLI 都失败",
+      taskId,
+      config,
+      {
+        spawn: (command) => {
+          if (command[0] === "claude") {
+            return {
+              exited: Promise.resolve(1),
+              stdout: streamFromText(""),
+              stderr: streamFromText("claude failed"),
+              kill: mock(() => {}),
+            };
+          }
+          return {
+            exited: Promise.resolve(1),
+            stdout: streamFromText(""),
+            stderr: streamFromText("codex failed"),
+            kill: mock(() => {}),
+          };
+        },
+        setTimeoutFn: () => ({ id: "timeout-both-fail" }),
+        clearTimeoutFn: mock(() => {}),
+      }
+    );
+
+    expect(result.status).toBe("failed");
+    expect(result.summary).toBe("Claude 与 Codex 分析均失败");
+    expect(result.reason).toContain("claude failed");
+    expect(result.reason).toContain("codex failed");
+    expect(logPath).toBe(join(logDir, `${taskId}-codex.jsonl`));
+  });
+
+  it("uses configured Codex executable and model for fallback", async () => {
+    const taskId = `runner-codex-config-${crypto.randomUUID()}`;
+    const logDir = await createLogDir();
+    const config = makeWorkerConfig({
+      logDir,
+      timeoutSeconds: 5,
+      codexExecutable: "/opt/homebrew/bin/codex",
+      codexModel: "gpt-5.1-codex",
+      codexSandbox: "workspace-write",
+    });
+    const commands: string[][] = [];
+
+    await runClaudeAnalysis(
+      "Codex 配置",
+      "验证 fallback 命令",
+      taskId,
+      config,
+      {
+        spawn: (command) => {
+          commands.push(command);
+          if (commands.length === 1) {
+            return {
+              exited: Promise.resolve(1),
+              stdout: streamFromText(""),
+              stderr: streamFromText("claude failed"),
+              kill: mock(() => {}),
+            };
+          }
+          return {
+            exited: Promise.resolve(0),
+            stdout: streamFromText(codexMessageEvent(JSON.stringify({ status: "resolved", summary: "done", reason: "", files: [] }))),
+            stderr: streamFromText(""),
+            kill: mock(() => {}),
+          };
+        },
+        setTimeoutFn: () => ({ id: "timeout-codex-config" }),
+        clearTimeoutFn: mock(() => {}),
+      }
+    );
+
+    expect(commands[1]?.slice(0, 6)).toEqual(["/opt/homebrew/bin/codex", "--ask-for-approval", "never", "--model", "gpt-5.1-codex", "exec"]);
+    expect(commands[1]).toContain("workspace-write");
+  });
+
+  it("kills the process and returns timeout result when timer fires and fallback is disabled", async () => {
     const taskId = `runner-timeout-${crypto.randomUUID()}`;
     const logDir = await createLogDir();
-    const config = makeWorkerConfig({ logDir, timeoutSeconds: 1 });
+    const config = makeWorkerConfig({ logDir, timeoutSeconds: 1, enableCodexFallback: false });
     const kill = mock(() => {});
     const clearTimeoutFn = mock(() => {});
     const timeoutHandle = { id: "timeout-3" };

@@ -12,6 +12,10 @@ export function makeWorkerConfig(overrides?: Partial<WorkerConfig>): WorkerConfi
     timeoutSeconds: 600,
     claudeModel: "sonnet",
     claudeExecutable: "claude",
+    codexModel: "",
+    codexExecutable: "codex",
+    codexSandbox: "read-only",
+    enableCodexFallback: true,
     preAnalysisScript: "",
     ...overrides,
   };

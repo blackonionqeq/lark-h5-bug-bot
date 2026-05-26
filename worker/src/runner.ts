@@ -25,6 +25,14 @@ type PreAnalysisResult = {
   stderr: string;
 };
 
+type AgentProvider = "claude" | "codex";
+
+type AgentRunResult = {
+  provider: AgentProvider;
+  result: AnalysisResult;
+  logPath: string;
+};
+
 export interface RunnerDeps {
   spawn(command: string[], options: SpawnOptions): SpawnedProcess;
   runPreAnalysisScript(scriptPath: string, cwd: string): Promise<PreAnalysisResult>;
@@ -57,8 +65,9 @@ const defaultRunnerDeps: RunnerDeps = {
   },
 };
 
-async function buildPrompt(title: string, description: string): Promise<string> {
-  const templatePath = fileURLToPath(new URL("../prompts/analyze-bug.txt", import.meta.url));
+async function buildPrompt(provider: AgentProvider, title: string, description: string): Promise<string> {
+  const templateName = provider === "claude" ? "analyze-bug.txt" : "analyze-bug-codex.txt";
+  const templatePath = fileURLToPath(new URL(`../prompts/${templateName}`, import.meta.url));
   const template = await readFile(templatePath, "utf-8");
   return template.replace("{title}", title).replace("{description}", description);
 }
@@ -68,38 +77,43 @@ function resolveWorkerPath(path: string): string {
   return resolve(fileURLToPath(new URL("..", import.meta.url)), path);
 }
 
-export function extractResult(jsonl: string): AnalysisResult {
+function parseAnalysisText(text: string, providerLabel: string): AnalysisResult {
+  if (!text.trim()) {
+    return {
+      status: "failed",
+      summary: "分析结果为空，请检查模型唤起是否异常",
+      reason: `${providerLabel} 返回了空结果，未产出任何分析文本；请检查模型服务、CLI 调用链路或鉴权状态。`,
+      files: [],
+    };
+  }
+
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (jsonMatch) {
+    const parsed = JSON.parse(jsonMatch[0]);
+    return {
+      status: parsed.status ?? "inconclusive",
+      summary: parsed.summary ?? "",
+      reason: parsed.reason ?? "",
+      files: parsed.files ?? [],
+    };
+  }
+
+  return {
+    status: "failed",
+    summary: "分析结果格式不正确",
+    reason: `${providerLabel} 已返回文本，但未输出约定的 JSON 对象。原始输出片段: ${text.slice(0, 500)}`,
+    files: [],
+  };
+}
+
+export function extractClaudeResult(jsonl: string): AnalysisResult {
   const lines = jsonl.trim().split("\n");
   for (let i = lines.length - 1; i >= 0; i--) {
     try {
       const event = JSON.parse(lines[i]);
       if (event.type === "result") {
         const text: string = event.result ?? "";
-        if (!text.trim()) {
-          return {
-            status: "failed",
-            summary: "分析结果为空，请检查模型唤起是否异常",
-            reason: "Claude CLI 返回了空结果，未产出任何分析文本；请检查模型服务、CLI 调用链路或鉴权状态。",
-            files: [],
-          };
-        }
-        // Try to extract JSON from the result text
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]);
-          return {
-            status: parsed.status ?? "inconclusive",
-            summary: parsed.summary ?? "",
-            reason: parsed.reason ?? "",
-            files: parsed.files ?? [],
-          };
-        }
-        return {
-          status: "failed",
-          summary: "分析结果格式不正确",
-          reason: `Claude CLI 已返回文本，但未输出约定的 JSON 对象。原始输出片段: ${text.slice(0, 500)}`,
-          files: [],
-        };
+        return parseAnalysisText(text, "Claude CLI");
       }
     } catch {
       // skip unparseable lines
@@ -108,7 +122,123 @@ export function extractResult(jsonl: string): AnalysisResult {
   return { status: "failed", summary: "无法提取分析结果", reason: "JSONL 中未找到 result 事件", files: [] };
 }
 
-export async function runClaudeAnalysis(
+export function extractCodexResult(jsonl: string): AnalysisResult {
+  const lines = jsonl.trim().split("\n");
+  for (let i = lines.length - 1; i >= 0; i--) {
+    try {
+      const event = JSON.parse(lines[i]);
+      if (event.type === "item.completed" && event.item?.type === "agent_message") {
+        const text: string = event.item.text ?? "";
+        return parseAnalysisText(text, "Codex CLI");
+      }
+    } catch {
+      // skip unparseable lines
+    }
+  }
+  return { status: "failed", summary: "无法提取分析结果", reason: "JSONL 中未找到 Codex agent_message 事件", files: [] };
+}
+
+export const extractResult = extractClaudeResult;
+
+function buildClaudeCommand(config: WorkerConfig, prompt: string): string[] {
+  return [
+    config.claudeExecutable,
+    "-p",
+    prompt,
+    "--output-format",
+    "stream-json",
+    "--verbose",
+    "--max-turns",
+    String(config.maxTurns),
+    "--model",
+    config.claudeModel,
+  ];
+}
+
+function buildCodexCommand(config: WorkerConfig, prompt: string): string[] {
+  const command = [config.codexExecutable, "--ask-for-approval", "never"];
+  if (config.codexModel) {
+    command.push("--model", config.codexModel);
+  }
+  command.push("exec", "--json", "--sandbox", config.codexSandbox, prompt);
+  return command;
+}
+
+async function runProviderAnalysis(
+  provider: AgentProvider,
+  prompt: string,
+  taskId: string,
+  config: WorkerConfig,
+  deps: RunnerDeps
+): Promise<AgentRunResult> {
+  const logPath = join(config.logDir, `${taskId}-${provider}.jsonl`);
+  const command = provider === "claude" ? buildClaudeCommand(config, prompt) : buildCodexCommand(config, prompt);
+
+  log("runner", `启动 ${provider} 分析, taskId=${taskId}`);
+  log("runner", `${provider} 日志文件: ${logPath}`);
+
+  const proc = deps.spawn(command, {
+    cwd: config.repoPath,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+
+  const timeout = deps.setTimeoutFn(() => {
+    log("runner", `${provider} 分析超时 (${config.timeoutSeconds}s), 正在终止进程`);
+    proc.kill();
+  }, config.timeoutSeconds * 1000);
+
+  const exitCode = await proc.exited;
+  deps.clearTimeoutFn(timeout);
+
+  const stdout = proc.stdout ? await new Response(proc.stdout).text() : "";
+  const stderr = proc.stderr ? await new Response(proc.stderr).text() : "";
+
+  await writeFile(logPath, stdout, "utf-8");
+
+  if (exitCode === 124 || exitCode === null) {
+    error("runner", `${provider} 分析超时或被终止`);
+    return {
+      provider,
+      result: { status: "failed", summary: "分析超时", reason: `${provider} 超时限制 ${config.timeoutSeconds}s`, files: [] },
+      logPath,
+    };
+  }
+
+  if (exitCode !== 0) {
+    const providerLabel = provider === "claude" ? "Claude CLI" : "Codex CLI";
+    error("runner", `${providerLabel} 退出码: ${exitCode}`);
+    error("runner", `stderr: ${stderr.slice(0, 500)}`);
+    return {
+      provider,
+      result: {
+        status: "failed",
+        summary: `${providerLabel} 异常退出 (${exitCode})`,
+        reason: (stderr || stdout).slice(0, 500),
+        files: [],
+      },
+      logPath,
+    };
+  }
+
+  const result = provider === "claude" ? extractClaudeResult(stdout) : extractCodexResult(stdout);
+  log("runner", `${provider} 分析完成, status=${result.status}`);
+  return { provider, result, logPath };
+}
+
+function combineFailedResults(primary: AgentRunResult, fallback: AgentRunResult): AnalysisResult {
+  return {
+    status: "failed",
+    summary: "Claude 与 Codex 分析均失败",
+    reason: [
+      `Claude: ${primary.result.summary}; ${primary.result.reason}; log=${primary.logPath}`,
+      `Codex: ${fallback.result.summary}; ${fallback.result.reason}; log=${fallback.logPath}`,
+    ].join("\n"),
+    files: [],
+  };
+}
+
+export async function runAgentAnalysis(
   title: string,
   description: string,
   taskId: string,
@@ -120,7 +250,7 @@ export async function runClaudeAnalysis(
     ...deps,
   };
 
-  const prompt = await buildPrompt(title, description);
+  const prompt = await buildPrompt("claude", title, description);
 
   // Write prompt to temp file
   const promptFile = join(tmpdir(), `${taskId}-prompt.txt`);
@@ -128,14 +258,12 @@ export async function runClaudeAnalysis(
 
   // Prepare log directory
   await mkdir(config.logDir, { recursive: true });
-  const logPath = join(config.logDir, `${taskId}.jsonl`);
 
   // Read prompt from file for the -p argument
   const promptContent = await readFile(promptFile, "utf-8");
 
   log("runner", `启动分析, taskId=${taskId}`);
   log("runner", `工作目录: ${config.repoPath}`);
-  log("runner", `日志文件: ${logPath}`);
   if (config.preAnalysisScript) {
     const preAnalysisScript = resolveWorkerPath(config.preAnalysisScript);
     log("runner", `执行分析前脚本: ${preAnalysisScript}`);
@@ -151,55 +279,28 @@ export async function runClaudeAnalysis(
           reason: (preAnalysis.stderr || preAnalysis.stdout).slice(0, 500),
           files: [],
         },
-        logPath,
+        logPath: join(config.logDir, `${taskId}-claude.jsonl`),
       };
     }
   }
 
-  const proc = runnerDeps.spawn(
-    [config.claudeExecutable, "-p", promptContent, "--output-format", "stream-json", "--verbose", "--max-turns", String(config.maxTurns), "--model", config.claudeModel],
-    {
-      cwd: config.repoPath,
-      stdout: "pipe",
-      stderr: "pipe",
+  try {
+    const claudeRun = await runProviderAnalysis("claude", promptContent, taskId, config, runnerDeps);
+    if (claudeRun.result.status !== "failed" || !config.enableCodexFallback) {
+      return { result: claudeRun.result, logPath: claudeRun.logPath };
     }
-  );
 
-  const timeout = runnerDeps.setTimeoutFn(() => {
-    log("runner", `分析超时 (${config.timeoutSeconds}s), 正在终止进程`);
-    proc.kill();
-  }, config.timeoutSeconds * 1000);
+    log("runner", `Claude 分析失败，尝试 Codex fallback: ${claudeRun.result.summary}`);
+    const codexPrompt = await buildPrompt("codex", title, description);
+    const codexRun = await runProviderAnalysis("codex", codexPrompt, taskId, config, runnerDeps);
+    if (codexRun.result.status !== "failed") {
+      return { result: codexRun.result, logPath: codexRun.logPath };
+    }
 
-  const exitCode = await proc.exited;
-  runnerDeps.clearTimeoutFn(timeout);
-
-  const stdout = proc.stdout ? await new Response(proc.stdout).text() : "";
-  const stderr = proc.stderr ? await new Response(proc.stderr).text() : "";
-
-  // Write output to log file
-  await writeFile(logPath, stdout, "utf-8");
-
-  // Clean up temp file
-  await unlink(promptFile);
-
-  if (exitCode === 124 || exitCode === null) {
-    error("runner", "分析超时或被终止");
-    return {
-      result: { status: "failed", summary: "分析超时", reason: `超时限制 ${config.timeoutSeconds}s`, files: [] },
-      logPath,
-    };
+    return { result: combineFailedResults(claudeRun, codexRun), logPath: codexRun.logPath };
+  } finally {
+    await unlink(promptFile);
   }
-
-  if (exitCode !== 0) {
-    error("runner", `Claude CLI 退出码: ${exitCode}`);
-    error("runner", `stderr: ${stderr.slice(0, 500)}`);
-    return {
-      result: { status: "failed", summary: `Claude CLI 异常退出 (${exitCode})`, reason: stderr.slice(0, 500), files: [] },
-      logPath,
-    };
-  }
-
-  const result = extractResult(stdout);
-  log("runner", `分析完成, status=${result.status}`);
-  return { result, logPath };
 }
+
+export const runClaudeAnalysis = runAgentAnalysis;

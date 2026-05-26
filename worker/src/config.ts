@@ -16,6 +16,10 @@ export interface WorkerConfig {
   timeoutSeconds: number;
   claudeModel: string;
   claudeExecutable: string;
+  codexModel: string;
+  codexExecutable: string;
+  codexSandbox: string;
+  enableCodexFallback: boolean;
   preAnalysisScript: string;
 }
 
@@ -30,6 +34,10 @@ export function getConfig(overrides?: Partial<WorkerConfig>): WorkerConfig {
     timeoutSeconds: 600,
     claudeModel: "sonnet",
     claudeExecutable: "claude",
+    codexModel: "",
+    codexExecutable: "codex",
+    codexSandbox: "read-only",
+    enableCodexFallback: true,
     preAnalysisScript: "./scripts/pre-analysis.sh",
   };
 
@@ -50,6 +58,10 @@ export function getConfig(overrides?: Partial<WorkerConfig>): WorkerConfig {
     timeoutSeconds: Number(Bun.env.TIMEOUT_SECONDS) || 600,
     claudeModel: Bun.env.CLAUDE_MODEL || "sonnet",
     claudeExecutable: Bun.env.CLAUDE_EXECUTABLE || "claude",
+    codexModel: Bun.env.CODEX_MODEL || "",
+    codexExecutable: Bun.env.CODEX_EXECUTABLE || "codex",
+    codexSandbox: Bun.env.CODEX_SANDBOX || "read-only",
+    enableCodexFallback: Bun.env.ENABLE_CODEX_FALLBACK !== "false",
     preAnalysisScript: Bun.env.PRE_ANALYSIS_SCRIPT || "./scripts/pre-analysis.sh",
   };
 }
