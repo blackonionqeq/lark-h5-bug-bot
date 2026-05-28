@@ -8,9 +8,11 @@ function mockFetch(implementation: (...args: Parameters<typeof fetch>) => Return
 
 describe("createCloudTaskApi", () => {
   let fetchSpy: ReturnType<typeof spyOn>;
+  let consoleErrorSpy: ReturnType<typeof spyOn>;
 
   afterEach(() => {
     fetchSpy?.mockRestore();
+    consoleErrorSpy?.mockRestore();
   });
 
   describe("fetchPending", () => {
@@ -40,14 +42,39 @@ describe("createCloudTaskApi", () => {
     });
 
     it("returns null on non-ok response", async () => {
+      consoleErrorSpy = spyOn(console, "error").mockImplementation(() => {});
       fetchSpy = mockFetch(() =>
-        Promise.resolve(new Response("", { status: 500 }))
+        Promise.resolve(new Response("origin timeout", {
+          status: 522,
+          headers: {
+            "server": "cloudflare",
+            "cf-ray": "ray-1",
+          },
+        }))
       );
 
       const api = createCloudTaskApi("http://cloud", "token");
       const result = await api.fetchPending();
 
       expect(result).toBeNull();
+      expect(consoleErrorSpy.mock.calls[0][0]).toContain("拉取任务失败");
+      expect(consoleErrorSpy.mock.calls[0][0]).toContain("status=522");
+      expect(consoleErrorSpy.mock.calls[0][0]).toContain("server:cloudflare");
+      expect(consoleErrorSpy.mock.calls[0][0]).toContain("cf-ray:ray-1");
+      expect(consoleErrorSpy.mock.calls[0][0]).toContain("origin timeout");
+    });
+
+    it("returns null and logs diagnostics when fetch throws", async () => {
+      consoleErrorSpy = spyOn(console, "error").mockImplementation(() => {});
+      fetchSpy = mockFetch(() => Promise.reject(new Error("dns failed")));
+
+      const api = createCloudTaskApi("http://cloud", "token");
+      const result = await api.fetchPending();
+
+      expect(result).toBeNull();
+      expect(consoleErrorSpy.mock.calls[0][0]).toContain("拉取任务异常");
+      expect(consoleErrorSpy.mock.calls[0][0]).toContain("url=http://cloud/agent/tasks/pending");
+      expect(consoleErrorSpy.mock.calls[0][0]).toContain("dns failed");
     });
 
     it("sends Bearer auth header", async () => {
@@ -82,12 +109,26 @@ describe("createCloudTaskApi", () => {
     });
 
     it("does not throw on non-ok response", async () => {
+      consoleErrorSpy = spyOn(console, "error").mockImplementation(() => {});
       fetchSpy = mockFetch(() =>
         Promise.resolve(new Response("", { status: 500 }))
       );
 
       const api = createCloudTaskApi("http://cloud", "token");
       await expect(api.submitResult("task-1", {})).resolves.toBeUndefined();
+      expect(consoleErrorSpy.mock.calls[0][0]).toContain("提交结果失败");
+      expect(consoleErrorSpy.mock.calls[0][0]).toContain("status=500");
+    });
+
+    it("does not throw when result submission fetch throws", async () => {
+      consoleErrorSpy = spyOn(console, "error").mockImplementation(() => {});
+      fetchSpy = mockFetch(() => Promise.reject(new Error("connection reset")));
+
+      const api = createCloudTaskApi("http://cloud", "token");
+      await expect(api.submitResult("task-1", {})).resolves.toBeUndefined();
+
+      expect(consoleErrorSpy.mock.calls[0][0]).toContain("提交结果异常");
+      expect(consoleErrorSpy.mock.calls[0][0]).toContain("connection reset");
     });
   });
 });

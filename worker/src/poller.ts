@@ -1,4 +1,5 @@
 import { error } from "./logger";
+import { describeFetchError, describeHttpFailure } from "./net-diagnostics";
 import type { AnalysisTask } from "../../code/src/types";
 
 export interface CloudTaskApi {
@@ -16,13 +17,23 @@ export function createCloudTaskApi(cloudUrl: string, agentToken: string): CloudT
   };
 
   async function fetchPending(): Promise<AnalysisTask | null> {
-    const res = await fetch(`${cloudUrl}/agent/tasks/pending`, {
-      headers: authHeaders,
-    });
-    if (!res.ok) {
-      error("poller", `拉取任务失败: HTTP ${res.status}`);
+    const url = `${cloudUrl}/agent/tasks/pending`;
+    let res: Response;
+
+    try {
+      res = await fetch(url, {
+        headers: authHeaders,
+      });
+    } catch (err) {
+      error("poller", `拉取任务异常: ${describeFetchError(url, err)}`);
       return null;
     }
+
+    if (!res.ok) {
+      error("poller", `拉取任务失败: ${await describeHttpFailure(url, res)}`);
+      return null;
+    }
+
     const data = (await res.json()) as { task: AnalysisTask | null };
     return data.task ?? null;
   }
@@ -31,13 +42,22 @@ export function createCloudTaskApi(cloudUrl: string, agentToken: string): CloudT
     taskId: string,
     patch: Record<string, unknown>
   ): Promise<void> {
-    const res = await fetch(`${cloudUrl}/agent/tasks/${taskId}/result`, {
-      method: "POST",
-      headers: authHeaders,
-      body: JSON.stringify(patch),
-    });
+    const url = `${cloudUrl}/agent/tasks/${taskId}/result`;
+    let res: Response;
+
+    try {
+      res = await fetch(url, {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify(patch),
+      });
+    } catch (err) {
+      error("poller", `提交结果异常: ${describeFetchError(url, err)}`);
+      return;
+    }
+
     if (!res.ok) {
-      error("poller", `提交结果失败: HTTP ${res.status}`);
+      error("poller", `提交结果失败: ${await describeHttpFailure(url, res)}`);
     }
   }
 

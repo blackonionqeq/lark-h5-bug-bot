@@ -152,6 +152,7 @@ Worker 需要本机安装 Claude Code CLI，并且 `REPO_PATH` 指向的前端�
 cd worker
 pnpm install
 pnpm start
+pnpm healthcheck  # 手动诊断 Worker 到 CLOUD_URL 的 DNS/代理/HTTP 连通性
 ```
 
 ---
@@ -194,6 +195,8 @@ GET  /agent/tasks/pending       # 拉取并认领一个待处理任务
 POST /agent/tasks/:id/claim     # 显式认领任务
 POST /agent/tasks/:id/result    # 提交中间/最终状态
 ```
+
+注意：`pnpm healthcheck` 会带 `AGENT_API_TOKEN` 请求 `GET /agent/tasks/pending` 以验证鉴权链路，因此在有待处理任务时可能会认领一个任务。
 
 ---
 

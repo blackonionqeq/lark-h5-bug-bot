@@ -199,16 +199,26 @@ Source: `worker/src/index.ts:26-32`
 If polling itself fails, the worker prints:
 
 ```txt
-[poller] 拉取任务失败: HTTP 401
+[poller] 拉取任务失败: url=https://cloud.example.com/agent/tasks/pending status=522 proxy=https_proxy=http://127.0.0.1:7890/ headers=server:cloudflare,cf-ray:...
 ```
 
-or other HTTP status codes.
+The diagnostic line includes the target URL, HTTP status, proxy environment summary, selected response headers, and a short response body snippet.
 
-Source: `worker/src/poller.ts:17-23`
+Source: `worker/src/poller.ts`, `worker/src/net-diagnostics.ts`
 
 Common meanings:
 - `401`: `AGENT_API_TOKEN` mismatch between cloud and worker
 - `404` / `500`: cloud route missing or cloud service error
+- `522`: Cloudflare reached the edge but timed out connecting to the origin; also check worker-side proxy/DNS if the proxy field is set
+
+For a manual connectivity check from the worker machine:
+
+```bash
+cd worker
+pnpm healthcheck
+```
+
+`pnpm healthcheck` prints DNS results, proxy settings, and unauthenticated/authenticated pending-task responses. The authenticated check calls `GET /agent/tasks/pending`, so it can claim a queued task.
 
 ### 3. Triage stage
 
@@ -316,10 +326,10 @@ Source: `worker/src/reporter.ts:21-32`
 When the worker writes final status back to the cloud task API and the request fails, it prints:
 
 ```txt
-[poller] 提交结果失败: HTTP ...
+[poller] 提交结果失败: url=https://cloud.example.com/agent/tasks/<taskId>/result status=...
 ```
 
-Source: `worker/src/poller.ts:29-40`
+Source: `worker/src/poller.ts`, `worker/src/net-diagnostics.ts`
 
 If the whole task finishes normally, the worker prints:
 
