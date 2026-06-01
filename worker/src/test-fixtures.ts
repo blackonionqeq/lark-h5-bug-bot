@@ -2,7 +2,7 @@ import type { AnalysisTask, TriageResult, AnalysisResult } from "../../code/src/
 import type { WorkerConfig } from "./config";
 
 export function makeWorkerConfig(overrides?: Partial<WorkerConfig>): WorkerConfig {
-  return {
+  const config: WorkerConfig = {
     cloudUrl: "http://localhost:9999",
     agentApiToken: "test-token",
     repoPath: "/tmp/test-repo",
@@ -16,9 +16,16 @@ export function makeWorkerConfig(overrides?: Partial<WorkerConfig>): WorkerConfi
     codexExecutable: "codex",
     codexSandbox: "read-only",
     enableCodexFallback: true,
+    agentProviderOrder: ["claude", "codex"],
     preAnalysisScript: "",
     ...overrides,
   };
+
+  if (overrides?.enableCodexFallback === false && !overrides.agentProviderOrder) {
+    config.agentProviderOrder = ["claude"];
+  }
+
+  return config;
 }
 
 export function makeAnalysisTask(overrides?: Partial<AnalysisTask>): AnalysisTask {

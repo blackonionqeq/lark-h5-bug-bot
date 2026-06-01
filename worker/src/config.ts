@@ -20,7 +20,33 @@ export interface WorkerConfig {
   codexExecutable: string;
   codexSandbox: string;
   enableCodexFallback: boolean;
+  agentProviderOrder: AgentProvider[];
   preAnalysisScript: string;
+}
+
+export type AgentProvider = "claude" | "codex";
+
+function parseAgentProviderOrder(value: string): AgentProvider[] {
+  const providers = value
+    .split(",")
+    .map((provider) => provider.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (providers.length === 0) {
+    throw new Error("AGENT_PROVIDER_ORDER must include at least one provider");
+  }
+
+  const uniqueProviders: AgentProvider[] = [];
+  for (const provider of providers) {
+    if (provider !== "claude" && provider !== "codex") {
+      throw new Error(`Invalid AGENT_PROVIDER_ORDER provider: ${provider}`);
+    }
+    if (!uniqueProviders.includes(provider)) {
+      uniqueProviders.push(provider);
+    }
+  }
+
+  return uniqueProviders;
 }
 
 export function getConfig(overrides?: Partial<WorkerConfig>): WorkerConfig {
@@ -38,6 +64,7 @@ export function getConfig(overrides?: Partial<WorkerConfig>): WorkerConfig {
     codexExecutable: "codex",
     codexSandbox: "read-only",
     enableCodexFallback: true,
+    agentProviderOrder: ["codex", "claude"],
     preAnalysisScript: "./scripts/pre-analysis.sh",
   };
 
@@ -47,6 +74,13 @@ export function getConfig(overrides?: Partial<WorkerConfig>): WorkerConfig {
       ...overrides,
     };
   }
+
+  const enableCodexFallback = Bun.env.ENABLE_CODEX_FALLBACK !== "false";
+  const agentProviderOrder = Bun.env.AGENT_PROVIDER_ORDER
+    ? parseAgentProviderOrder(Bun.env.AGENT_PROVIDER_ORDER)
+    : enableCodexFallback
+      ? defaults.agentProviderOrder
+      : (["claude"] satisfies AgentProvider[]);
 
   return {
     cloudUrl: requireEnv("CLOUD_URL"),
@@ -61,7 +95,8 @@ export function getConfig(overrides?: Partial<WorkerConfig>): WorkerConfig {
     codexModel: Bun.env.CODEX_MODEL || "",
     codexExecutable: Bun.env.CODEX_EXECUTABLE || "codex",
     codexSandbox: Bun.env.CODEX_SANDBOX || "read-only",
-    enableCodexFallback: Bun.env.ENABLE_CODEX_FALLBACK !== "false",
+    enableCodexFallback,
+    agentProviderOrder,
     preAnalysisScript: Bun.env.PRE_ANALYSIS_SCRIPT || "./scripts/pre-analysis.sh",
   };
 }

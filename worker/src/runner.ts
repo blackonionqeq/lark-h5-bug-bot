@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { error, log } from "./logger";
-import type { WorkerConfig } from "./config";
+import type { AgentProvider, WorkerConfig } from "./config";
 import type { AnalysisResult } from "../../code/src/types";
 
 type SpawnOptions = {
@@ -24,8 +24,6 @@ type PreAnalysisResult = {
   stdout: string;
   stderr: string;
 };
-
-type AgentProvider = "claude" | "codex";
 
 type AgentRunResult = {
   provider: AgentProvider;
@@ -226,16 +224,24 @@ async function runProviderAnalysis(
   return { provider, result, logPath };
 }
 
-function combineFailedResults(primary: AgentRunResult, fallback: AgentRunResult): AnalysisResult {
+function formatProviderName(provider: AgentProvider): string {
+  return provider === "claude" ? "Claude" : "Codex";
+}
+
+function combineFailedResults(runs: AgentRunResult[]): AnalysisResult {
   return {
     status: "failed",
-    summary: "Claude 与 Codex 分析均失败",
-    reason: [
-      `Claude: ${primary.result.summary}; ${primary.result.reason}; log=${primary.logPath}`,
-      `Codex: ${fallback.result.summary}; ${fallback.result.reason}; log=${fallback.logPath}`,
-    ].join("\n"),
+    summary: `${runs.map((run) => formatProviderName(run.provider)).join(" 与 ")} 分析均失败`,
+    reason: runs
+      .map((run) => `${formatProviderName(run.provider)}: ${run.result.summary}; ${run.result.reason}; log=${run.logPath}`)
+      .join("\n"),
     files: [],
   };
+}
+
+function getProviderOrder(config: WorkerConfig): AgentProvider[] {
+  if (config.agentProviderOrder.length > 0) return config.agentProviderOrder;
+  return config.enableCodexFallback ? ["claude", "codex"] : ["claude"];
 }
 
 export async function runAgentAnalysis(
@@ -250,20 +256,18 @@ export async function runAgentAnalysis(
     ...deps,
   };
 
-  const prompt = await buildPrompt("claude", title, description);
+  const primaryPrompt = await buildPrompt(getProviderOrder(config)[0] ?? "claude", title, description);
 
   // Write prompt to temp file
   const promptFile = join(tmpdir(), `${taskId}-prompt.txt`);
-  await writeFile(promptFile, prompt, "utf-8");
+  await writeFile(promptFile, primaryPrompt, "utf-8");
 
   // Prepare log directory
   await mkdir(config.logDir, { recursive: true });
 
-  // Read prompt from file for the -p argument
-  const promptContent = await readFile(promptFile, "utf-8");
-
   log("runner", `启动分析, taskId=${taskId}`);
   log("runner", `工作目录: ${config.repoPath}`);
+  log("runner", `Agent 顺序: ${getProviderOrder(config).join(" -> ")}`);
   if (config.preAnalysisScript) {
     const preAnalysisScript = resolveWorkerPath(config.preAnalysisScript);
     log("runner", `执行分析前脚本: ${preAnalysisScript}`);
@@ -285,19 +289,39 @@ export async function runAgentAnalysis(
   }
 
   try {
-    const claudeRun = await runProviderAnalysis("claude", promptContent, taskId, config, runnerDeps);
-    if (claudeRun.result.status !== "failed" || !config.enableCodexFallback) {
-      return { result: claudeRun.result, logPath: claudeRun.logPath };
+    const runs: AgentRunResult[] = [];
+    const providers = getProviderOrder(config);
+
+    for (const provider of providers) {
+      const promptContent = provider === providers[0] ? await readFile(promptFile, "utf-8") : await buildPrompt(provider, title, description);
+      const run = await runProviderAnalysis(provider, promptContent, taskId, config, runnerDeps);
+      runs.push(run);
+      if (run.result.status !== "failed") {
+        return { result: run.result, logPath: run.logPath };
+      }
+
+      const nextProvider = providers[runs.length];
+      if (nextProvider) {
+        log(
+          "runner",
+          `${formatProviderName(provider)} 分析失败，尝试 ${formatProviderName(nextProvider)}: ${run.result.summary}`
+        );
+      }
     }
 
-    log("runner", `Claude 分析失败，尝试 Codex fallback: ${claudeRun.result.summary}`);
-    const codexPrompt = await buildPrompt("codex", title, description);
-    const codexRun = await runProviderAnalysis("codex", codexPrompt, taskId, config, runnerDeps);
-    if (codexRun.result.status !== "failed") {
-      return { result: codexRun.result, logPath: codexRun.logPath };
+    const lastRun = runs.at(-1);
+    if (!lastRun) {
+      return {
+        result: { status: "failed", summary: "未配置 Agent provider", reason: "agentProviderOrder 为空", files: [] },
+        logPath: join(config.logDir, `${taskId}-agent.jsonl`),
+      };
     }
 
-    return { result: combineFailedResults(claudeRun, codexRun), logPath: codexRun.logPath };
+    if (runs.length === 1) {
+      return { result: lastRun.result, logPath: lastRun.logPath };
+    }
+
+    return { result: combineFailedResults(runs), logPath: lastRun.logPath };
   } finally {
     await unlink(promptFile);
   }

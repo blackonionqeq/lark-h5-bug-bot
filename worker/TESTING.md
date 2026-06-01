@@ -90,6 +90,8 @@ await runClaudeAnalysis("title", "desc", "task-1", makeWorkerConfig(), {
 Current runner tests cover:
 
 - successful execution with parsed JSONL result and log write
+- Codex-first execution when `AGENT_PROVIDER_ORDER=codex,claude`
+- Codex failure with Claude fallback
 - Claude non-zero exit with Codex fallback
 - Claude parse failure with Codex fallback
 - combined failure when both Claude and Codex fail
@@ -141,7 +143,7 @@ Then copy and execute the `sudo ...` command printed by PM2, and save the curren
 There is currently no application-side log rotation.
 
 - PM2 captures stdout/stderr under `~/.pm2/logs/`.
-- Agent raw JSONL output is written per task under `LOG_DIR` as `<taskId>-claude.jsonl` and, when fallback runs, `<taskId>-codex.jsonl`.
+- Agent raw JSONL output is written per task under `LOG_DIR` as `<taskId>-claude.jsonl` or `<taskId>-codex.jsonl`. When fallback runs, inspect both provider logs.
 - `LOG_DIR` defaults to `./logs` relative to `worker/` unless overridden in `.env`.
 
 If PM2 logs need rotation, install and configure PM2's logrotate module:
@@ -169,9 +171,9 @@ When the worker starts, it prints the basic config:
 分析仓库: ...
 日志目录: ...
 轮询间隔: ...
+Agent 顺序: codex -> claude
 Claude 模型: ...
 Claude CLI: ...
-Codex fallback: enabled|disabled
 Codex CLI: ...
 超时: ...
 ```
@@ -246,32 +248,33 @@ When analysis starts, the runner prints:
 ```txt
 [runner] 启动分析, taskId=...
 [runner] 工作目录: ...
-[runner] 启动 claude 分析, taskId=...
-[runner] claude 日志文件: ...
-```
-
-This means the task has passed triage and the worker is invoking Claude Code CLI first.
-
-If Claude exits abnormally, the worker prints:
-
-```txt
-[runner] Claude CLI 退出码: ...
-[runner] stderr: ...
-```
-
-If Codex fallback is enabled, the worker then prints:
-
-```txt
-[runner] Claude 分析失败，尝试 Codex fallback: ...
+[runner] Agent 顺序: codex -> claude
 [runner] 启动 codex 分析, taskId=...
 [runner] codex 日志文件: ...
 ```
 
-If Claude times out, the worker prints:
+This means the task has passed triage and the worker is invoking the first provider from `AGENT_PROVIDER_ORDER`.
+
+If the current provider exits abnormally, the worker prints:
 
 ```txt
-[runner] claude 分析超时 (...s), 正在终止进程
-[runner] claude 分析超时或被终止
+[runner] Codex CLI 退出码: ...
+[runner] stderr: ...
+```
+
+If another provider is configured, the worker then prints:
+
+```txt
+[runner] Codex 分析失败，尝试 Claude: ...
+[runner] 启动 claude 分析, taskId=...
+[runner] claude 日志文件: ...
+```
+
+If a provider times out, the worker prints:
+
+```txt
+[runner] codex 分析超时 (...s), 正在终止进程
+[runner] codex 分析超时或被终止
 ```
 
 ### 5. Analysis result and log file

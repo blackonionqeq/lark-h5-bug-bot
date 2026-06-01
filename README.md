@@ -1,6 +1,6 @@
 # 飞书 Bug Bot：禅道 Webhook + 自动 Bug 分析
 
-基于 **TypeScript + Bun** 的 Bug 自动分析系统。禅道提交 bug 后，云端服务会先转发到飞书群聊；其中 **active** 状态的 bug 会额外入队分析任务，本地 Worker 再拉取任务，通过 Claude Code CLI 自动分析前端代码，将结论回传飞书群。
+基于 **TypeScript + Bun** 的 Bug 自动分析系统。禅道提交 bug 后，云端服务会先转发到飞书群聊；其中 **active** 状态的 bug 会额外入队分析任务，本地 Worker 再拉取任务，通过配置的 Agent CLI 自动分析前端代码，将结论回传飞书群。
 
 ## 整体流程
 
@@ -16,7 +16,7 @@
     |-- 轮询拉取任务
     |-- 规则分诊：是否前端 bug？
     |      |-- 否 -> 回调云端：skipped
-    |      |-- 是 -> 调用 Claude Code CLI 分析源码
+    |      |-- 是 -> 按配置顺序调用 Codex / Claude Code CLI 分析源码
     |-- 回调云端 /callback/analysis-result
     v
 云端格式化结果 -> 发飞书群
@@ -50,7 +50,7 @@
     │   ├── config.ts
     │   ├── poller.ts        # 云端 API 客户端
     │   ├── triage.ts        # 规则分诊
-    │   ├── runner.ts        # Claude Code CLI 调用
+    │   ├── runner.ts        # Agent CLI 调用
     │   └── reporter.ts      # 回调云端
     ├── prompts/
     │   └── analyze-bug.txt  # 分析 prompt 模板
@@ -99,6 +99,7 @@ TIMEOUT_SECONDS=600
 MAX_TURNS=40
 CLAUDE_MODEL=sonnet
 CLAUDE_EXECUTABLE=claude
+AGENT_PROVIDER_ORDER=codex,claude
 ENABLE_CODEX_FALLBACK=true
 CODEX_EXECUTABLE=codex
 CODEX_MODEL=
@@ -122,7 +123,8 @@ PRE_ANALYSIS_SCRIPT=./scripts/pre-analysis.sh
 | `MAX_TURNS` | 可选 | Claude Code 最大 turn 数，默认 `40` |
 | `CLAUDE_MODEL` | 可选 | Claude Code 使用的模型，默认 `sonnet` |
 | `CLAUDE_EXECUTABLE` | 可选 | Claude Code CLI 可执行文件名或绝对路径，默认 `claude` |
-| `ENABLE_CODEX_FALLBACK` | 可选 | Claude Code 失败时是否尝试 Codex 无头模式，默认 `true`；设为 `false` 可关闭 |
+| `AGENT_PROVIDER_ORDER` | 可选 | Agent CLI 优先级，逗号分隔，支持 `codex` 和 `claude`；默认 `codex,claude` |
+| `ENABLE_CODEX_FALLBACK` | 可选 | 兼容旧配置；未设置 `AGENT_PROVIDER_ORDER` 时，设为 `false` 会只运行 Claude |
 | `CODEX_EXECUTABLE` | 可选 | Codex CLI 可执行文件名或绝对路径，默认 `codex` |
 | `CODEX_MODEL` | 可选 | Codex CLI 使用的模型；为空时使用 Codex 默认配置 |
 | `CODEX_SANDBOX` | 可选 | Codex exec sandbox，默认 `read-only` |
@@ -144,9 +146,9 @@ pnpm typecheck    # 类型检查
 
 ### 本地 Worker
 
-Worker 需要本机安装 Claude Code CLI，并且 `REPO_PATH` 指向的前端项目已 clone。默认通过 `PATH` 查找 `claude`；如果后台进程环境拿不到该命令，可通过 `CLAUDE_EXECUTABLE` 显式指定可执行文件名或绝对路径。
+Worker 需要本机安装 `AGENT_PROVIDER_ORDER` 中配置的 Agent CLI，并且 `REPO_PATH` 指向的前端项目已 clone。默认优先运行 Codex，再在失败时尝试 Claude Code；如果后台进程环境拿不到命令，可通过 `CODEX_EXECUTABLE` 或 `CLAUDE_EXECUTABLE` 显式指定可执行文件名或绝对路径。
 
-如果启用 Codex fallback，Worker 还需要安装并认证 Codex CLI。Claude Code 进程异常、超时、或 JSONL 结果不可解析时，Worker 会继续用 `codex exec --json` 无头模式分析；Claude 正常返回 `suspected`、`resolved` 或 `inconclusive` 时不会 fallback。
+Codex 使用 `codex exec --json` 无头模式分析。当前 provider 进程异常、超时、或 JSONL 结果不可解析时，Worker 会继续尝试 `AGENT_PROVIDER_ORDER` 中的下一个 provider；正常返回 `suspected`、`resolved` 或 `inconclusive` 时不会继续 fallback。
 
 ```bash
 cd worker
@@ -249,8 +251,8 @@ scp lark-h5-bug-bot.tar.gz your-user@your-server:/opt/
 1. 飞书消息存在限频，控制调用频率。
 2. Worker 和云端可以部署在不同机器上，Worker 只需能访问云端的 HTTP 地址。
 3. Worker 通过出站 HTTPS 请求拉取任务，不需要内网穿透。
-4. Claude Code CLI 需要在 Worker 机器上安装并完成认证；若 pm2 或其他后台环境拿不到 `claude`，请设置 `CLAUDE_EXECUTABLE`。
-5. 启用 Codex fallback 时，Codex CLI 也需要在 Worker 机器上安装并完成认证；若后台环境拿不到 `codex`，请设置 `CODEX_EXECUTABLE`。
+4. `AGENT_PROVIDER_ORDER` 中配置的 Agent CLI 需要在 Worker 机器上安装并完成认证；若 pm2 或其他后台环境拿不到命令，请设置 `CLAUDE_EXECUTABLE` 或 `CODEX_EXECUTABLE`。
+5. 默认 `AGENT_PROVIDER_ORDER=codex,claude`，需要 Claude Code 优先时改为 `claude,codex`；只想运行单个 provider 时可设为 `codex` 或 `claude`。
 6. 分诊为规则策略，默认将不确定的 bug 归类为前端，后续可按日志数据决定是否引入 LLM 分诊。
 
 ---

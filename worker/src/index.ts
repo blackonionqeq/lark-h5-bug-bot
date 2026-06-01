@@ -13,9 +13,9 @@ log("worker", `云端地址: ${config.cloudUrl}`);
 log("worker", `分析仓库: ${config.repoPath}`);
 log("worker", `日志目录: ${config.logDir}`);
 log("worker", `轮询间隔: ${config.pollIntervalMs}ms`);
+log("worker", `Agent 顺序: ${config.agentProviderOrder.join(" -> ")}`);
 log("worker", `Claude 模型: ${config.claudeModel}`);
 log("worker", `Claude CLI: ${config.claudeExecutable}`);
-log("worker", `Codex fallback: ${config.enableCodexFallback ? "enabled" : "disabled"}`);
 log("worker", `Codex CLI: ${config.codexExecutable}`);
 log("worker", `分析前脚本: ${config.preAnalysisScript}`);
 log("worker", `超时: ${config.timeoutSeconds}s / 最多 ${config.maxTurns} turns`);
@@ -66,7 +66,7 @@ async function processOneTask(): Promise<void> {
       return;
     }
 
-    // 4. 执行 Agent 分析，Claude 失败时按配置 fallback 到 Codex
+    // 4. 按配置顺序执行 Agent 分析，失败时尝试下一个 provider
     const { result: analysisResult, logPath } = await runAgentAnalysis(
       task.title ?? "",
       task.description ?? "",

@@ -372,6 +372,78 @@ describe("runClaudeAnalysis", () => {
     expect(await readFile(join(logDir, `${taskId}-claude.jsonl`), "utf-8")).toBe("partial output");
   });
 
+  it("runs Codex first when configured as the preferred provider", async () => {
+    const taskId = `runner-codex-first-${crypto.randomUUID()}`;
+    const logDir = await createLogDir();
+    const config = makeWorkerConfig({ logDir, timeoutSeconds: 5, agentProviderOrder: ["codex", "claude"] });
+    const commands: string[][] = [];
+
+    const { result, logPath } = await runClaudeAnalysis(
+      "Codex 优先",
+      "验证优先级配置",
+      taskId,
+      config,
+      {
+        spawn: (command) => {
+          commands.push(command);
+          return {
+            exited: Promise.resolve(0),
+            stdout: streamFromText(codexMessageEvent(JSON.stringify({ status: "resolved", summary: "codex first", reason: "ok", files: [] }))),
+            stderr: streamFromText(""),
+            kill: mock(() => {}),
+          };
+        },
+        setTimeoutFn: () => ({ id: "timeout-codex-first" }),
+        clearTimeoutFn: mock(() => {}),
+      }
+    );
+
+    expect(commands).toHaveLength(1);
+    expect(commands[0]?.[0]).toBe("codex");
+    expect(commands[0]?.at(-1)).toContain(".codex/agents/bug-investigator.md");
+    expect(result.summary).toBe("codex first");
+    expect(logPath).toBe(join(logDir, `${taskId}-codex.jsonl`));
+  });
+
+  it("falls back to Claude when Codex fails first", async () => {
+    const taskId = `runner-codex-to-claude-${crypto.randomUUID()}`;
+    const logDir = await createLogDir();
+    const config = makeWorkerConfig({ logDir, timeoutSeconds: 5, agentProviderOrder: ["codex", "claude"] });
+    const commands: string[][] = [];
+
+    const { result, logPath } = await runClaudeAnalysis(
+      "Codex 失败",
+      "验证 Claude fallback",
+      taskId,
+      config,
+      {
+        spawn: (command) => {
+          commands.push(command);
+          if (command[0] === "codex") {
+            return {
+              exited: Promise.resolve(1),
+              stdout: streamFromText(""),
+              stderr: streamFromText("codex failed"),
+              kill: mock(() => {}),
+            };
+          }
+          return {
+            exited: Promise.resolve(0),
+            stdout: streamFromText(resultEvent(JSON.stringify({ status: "suspected", summary: "claude recovered", reason: "fallback worked", files: [] }))),
+            stderr: streamFromText(""),
+            kill: mock(() => {}),
+          };
+        },
+        setTimeoutFn: () => ({ id: "timeout-codex-to-claude" }),
+        clearTimeoutFn: mock(() => {}),
+      }
+    );
+
+    expect(commands.map((command) => command[0])).toEqual(["codex", "claude"]);
+    expect(result.summary).toBe("claude recovered");
+    expect(logPath).toBe(join(logDir, `${taskId}-claude.jsonl`));
+  });
+
   it("returns stderr content when claude exits with error and Codex fallback is disabled", async () => {
     const taskId = `runner-stderr-only-${crypto.randomUUID()}`;
     const logDir = await createLogDir();
