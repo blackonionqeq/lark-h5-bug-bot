@@ -257,7 +257,10 @@ describe("runClaudeAnalysis", () => {
       }
     );
 
-    expect(runPreAnalysisScript).toHaveBeenCalledWith(expect.stringContaining("/worker/scripts/pre-analysis.sh"), config.repoPath);
+    expect(runPreAnalysisScript).toHaveBeenCalledWith(
+      expect.stringContaining(join("worker", "scripts", "pre-analysis.sh")),
+      config.repoPath
+    );
     expect(spawn).toHaveBeenCalledTimes(1);
   });
 
