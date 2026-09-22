@@ -53,6 +53,44 @@ describe("enqueueTask", () => {
     expect(stored!.issueId).toBe("BUG-999");
   });
 
+  it("禅道原生 payload 缺描述时给出明确提示，不再输出空字段壳", () => {
+    // 2026-09-22 用户真实禅道 bug #8 的解析结果：优先级/严重程度/指派人全为空
+    const nativeParsed: ZentaoParsedFields = {
+      bugId: "8",
+      title: "[白屏]agent连通性测试",
+      status: "active",
+      priority: "",
+      severity: "",
+      creator: "admin",
+      operator: "admin",
+      assignee: "",
+      link: "http://blackonion.tail05ae45.ts.net/zentao/bug-view-8.html",
+    };
+
+    const event = makeAppEvent({
+      type: "zentao.webhook.received",
+      traceId: "trace-native-test",
+      payload: {
+        ...makeZentaoPayload(),
+        _parsed: nativeParsed,
+      },
+      meta: { issueId: "8" },
+    });
+
+    enqueueTask(event);
+
+    const stored = taskStore.get("trace-native-test");
+    expect(stored!.description).toBe(
+      [
+        "状态: active",
+        "描述: （禅道 webhook 未提供描述与复现步骤，请仅依据标题、链接与代码证据判断）",
+        "http://blackonion.tail05ae45.ts.net/zentao/bug-view-8.html",
+      ].join("\n")
+    );
+    expect(stored!.description).not.toContain("优先级:");
+    expect(stored!.description).not.toContain("严重程度:");
+  });
+
   it("handles payload without _parsed gracefully", () => {
     const event = makeAppEvent({
       type: "zentao.webhook.received",
