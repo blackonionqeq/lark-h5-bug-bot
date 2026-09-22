@@ -8,6 +8,7 @@ import type { AnalysisResult } from "../../code/src/types";
 
 type SpawnOptions = {
   cwd: string;
+  stdin: Blob;
   stdout: "pipe";
   stderr: "pipe";
 };
@@ -164,11 +165,10 @@ export function extractCodexResult(jsonl: string): AnalysisResult {
 
 export const extractResult = extractClaudeResult;
 
-function buildClaudeCommand(config: WorkerConfig, prompt: string): string[] {
+function buildClaudeCommand(config: WorkerConfig): string[] {
   return [
     config.claudeExecutable,
     "-p",
-    prompt,
     "--output-format",
     "stream-json",
     "--verbose",
@@ -179,12 +179,12 @@ function buildClaudeCommand(config: WorkerConfig, prompt: string): string[] {
   ];
 }
 
-function buildCodexCommand(config: WorkerConfig, prompt: string): string[] {
+function buildCodexCommand(config: WorkerConfig): string[] {
   const command = [config.codexExecutable, "--ask-for-approval", "never"];
   if (config.codexModel) {
     command.push("--model", config.codexModel);
   }
-  command.push("exec", "--json", "--sandbox", config.codexSandbox, prompt);
+  command.push("exec", "--json", "--sandbox", config.codexSandbox, "-");
   return command;
 }
 
@@ -196,13 +196,14 @@ async function runProviderAnalysis(
   deps: RunnerDeps
 ): Promise<AgentRunResult> {
   const logPath = join(config.logDir, `${taskId}-${provider}.jsonl`);
-  const command = provider === "claude" ? buildClaudeCommand(config, prompt) : buildCodexCommand(config, prompt);
+  const command = provider === "claude" ? buildClaudeCommand(config) : buildCodexCommand(config);
 
   log("runner", `启动 ${provider} 分析, taskId=${taskId}`);
   log("runner", `${provider} 日志文件: ${logPath}`);
 
   const proc = deps.spawn(command, {
     cwd: config.repoPath,
+    stdin: new Blob([prompt], { type: "text/plain;charset=utf-8" }),
     stdout: "pipe",
     stderr: "pipe",
   });

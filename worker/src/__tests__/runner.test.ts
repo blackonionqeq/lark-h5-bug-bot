@@ -247,6 +247,7 @@ describe("runClaudeAnalysis", () => {
     await Bun.write(projectContextFile, "优先读取项目内的 checkout-flow Skill。\n");
     const config = makeWorkerConfig({ logDir, projectContextFile });
     let command: string[] | undefined;
+    let promptInput: Blob | undefined;
 
     await runClaudeAnalysis(
       "结算页白屏",
@@ -254,8 +255,9 @@ describe("runClaudeAnalysis", () => {
       taskId,
       config,
       {
-        spawn: (spawnCommand) => {
+        spawn: (spawnCommand, options) => {
           command = spawnCommand;
+          promptInput = options.stdin;
           return {
             exited: Promise.resolve(0),
             stdout: streamFromText(resultEvent(JSON.stringify({ status: "resolved", summary: "done", reason: "found", files: [] }))),
@@ -268,7 +270,9 @@ describe("runClaudeAnalysis", () => {
       }
     );
 
-    const prompt = command?.[2] ?? "";
+    const prompt = await promptInput?.text() ?? "";
+    expect(command).not.toContain(prompt);
+    expect(command?.slice(0, 2)).toEqual(["claude", "-p"]);
     expect(prompt).toContain("## 项目补充说明");
     expect(prompt).toContain("checkout-flow Skill");
     expect(prompt).toContain("标题：结算页白屏");
@@ -410,6 +414,7 @@ describe("runClaudeAnalysis", () => {
     const logDir = await createLogDir();
     const config = makeWorkerConfig({ logDir, timeoutSeconds: 5 });
     const commands: string[][] = [];
+    const promptInputs: Blob[] = [];
 
     const { result, logPath } = await runClaudeAnalysis(
       "接口报错",
@@ -417,8 +422,9 @@ describe("runClaudeAnalysis", () => {
       taskId,
       config,
       {
-        spawn: (command) => {
+        spawn: (command, options) => {
           commands.push(command);
+          promptInputs.push(options.stdin);
           if (command[0] === "claude") {
             return {
               exited: Promise.resolve(2),
@@ -440,9 +446,12 @@ describe("runClaudeAnalysis", () => {
     );
 
     expect(commands).toHaveLength(2);
+    const prompts = await Promise.all(promptInputs.map((input) => input.text()));
     expect(commands[1]?.slice(0, 4)).toEqual(["codex", "--ask-for-approval", "never", "exec"]);
-    expect(commands[1]?.at(-1)).toContain("标题：接口报错");
-    expect(commands[1]?.at(-1)).toBe(commands[0]?.[2]);
+    expect(commands[1]?.at(-1)).toBe("-");
+    expect(prompts[1]).toContain("标题：接口报错");
+    expect(prompts[1]).toContain("描述：执行过程中异常退出");
+    expect(prompts[1]).toBe(prompts[0]);
     expect(result.status).toBe("resolved");
     expect(result.summary).toBe("codex recovered");
     expect(logPath).toBe(join(logDir, `${taskId}-codex.jsonl`));
@@ -454,6 +463,7 @@ describe("runClaudeAnalysis", () => {
     const logDir = await createLogDir();
     const config = makeWorkerConfig({ logDir, timeoutSeconds: 5, agentProviderOrder: ["codex", "claude"] });
     const commands: string[][] = [];
+    let promptInput: Blob | undefined;
 
     const { result, logPath } = await runClaudeAnalysis(
       "Codex 优先",
@@ -461,8 +471,9 @@ describe("runClaudeAnalysis", () => {
       taskId,
       config,
       {
-        spawn: (command) => {
+        spawn: (command, options) => {
           commands.push(command);
+          promptInput = options.stdin;
           return {
             exited: Promise.resolve(0),
             stdout: streamFromText(codexMessageEvent(JSON.stringify({ status: "resolved", summary: "codex first", reason: "ok", files: [] }))),
@@ -476,8 +487,11 @@ describe("runClaudeAnalysis", () => {
     );
 
     expect(commands).toHaveLength(1);
+    const prompt = await promptInput?.text() ?? "";
     expect(commands[0]?.[0]).toBe("codex");
-    expect(commands[0]?.at(-1)).toContain("标题：Codex 优先");
+    expect(commands[0]?.at(-1)).toBe("-");
+    expect(prompt).toContain("标题：Codex 优先");
+    expect(prompt).toContain("描述：验证优先级配置");
     expect(result.summary).toBe("codex first");
     expect(logPath).toBe(join(logDir, `${taskId}-codex.jsonl`));
   });
