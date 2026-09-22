@@ -249,6 +249,10 @@ POST /agent/tasks/:id/result    # 提交中间/最终状态
 └── worker/     # 本地 Worker（可部署在不同机器）
 ```
 
+### 运行前提
+
+运行时是 **Bun**（`package.json` 里的脚本都是 `bun --env-file ../.env src/index.ts`），`pnpm` 只负责装依赖。云端和 Worker 两台机器都要先装 [Bun](https://bun.sh)，只装 Node/pnpm 起不来。
+
 ### 云端
 
 ```bash
@@ -265,20 +269,33 @@ pnpm install && pnpm start
 
 ### 后台运行
 
-```bash
-# 云端
-pm2 start "pnpm start" --name bug-bot-cloud --cwd /opt/lark-h5-bug-bot/code
+仓库自带 `ecosystem.config.cjs`（两个 app：`lark-h5-bug-bot-cloud`、`lark-h5-bug-bot-worker`）和 `scripts/worker-pm2.sh`（只管理 Worker 的常用命令）：
 
-# Worker
-pm2 start "pnpm start" --name bug-bot-worker --cwd /opt/lark-h5-bug-bot/worker
+```bash
+# 云端 + Worker 都拉起
+pm2 start ecosystem.config.cjs
+
+# 只拉起云端（Worker 在开发机上时）
+pm2 start ecosystem.config.cjs --only lark-h5-bug-bot-cloud
+
+# 只管理 Worker
+./scripts/worker-pm2.sh start      # 启动并 pm2 save
+./scripts/worker-pm2.sh logs       # 跟踪日志
+./scripts/worker-pm2.sh restart
+./scripts/worker-pm2.sh startup    # 开机自启
+./scripts/worker-pm2.sh logrotate  # 日志轮转
 ```
+
+`ecosystem.config.cjs` 用的是 `script: "pnpm"` + `args: "start"` + `interpreter: "none"`，让 pm2 直接调用 pnpm 并继承 shell 的 `PATH`，这样才拿得到 `bun` / `claude` / `codex`。
 
 ### 打包上传
 
 ```bash
-tar --exclude='*/node_modules' --exclude='.git' -czf lark-h5-bug-bot.tar.gz .
+tar --exclude='*/node_modules' --exclude='.git' --exclude='.env' -czf lark-h5-bug-bot.tar.gz .
 scp lark-h5-bug-bot.tar.gz your-user@your-server:/opt/
 ```
+
+`.env` 不入包（含密钥），上传后按上文「环境变量」在仓库根目录单独创建。
 
 ---
 
