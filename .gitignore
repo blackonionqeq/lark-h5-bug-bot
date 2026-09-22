@@ -40,3 +40,6 @@ tempnpm-cache
 
 # local ops notes
 PM2_RESTART_NOTES.local.md
+
+# local project-specific prompt context
+worker/prompts/project-context.local.md

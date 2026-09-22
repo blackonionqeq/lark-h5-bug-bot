@@ -22,6 +22,7 @@ export interface WorkerConfig {
   enableCodexFallback: boolean;
   agentProviderOrder: AgentProvider[];
   preAnalysisScript: string;
+  projectContextFile: string;
 }
 
 export type AgentProvider = "claude" | "codex";
@@ -66,6 +67,7 @@ export function getConfig(overrides?: Partial<WorkerConfig>): WorkerConfig {
     enableCodexFallback: true,
     agentProviderOrder: ["codex", "claude"],
     preAnalysisScript: "./scripts/pre-analysis.sh",
+    projectContextFile: "",
   };
 
   if (overrides) {
@@ -98,5 +100,6 @@ export function getConfig(overrides?: Partial<WorkerConfig>): WorkerConfig {
     enableCodexFallback,
     agentProviderOrder,
     preAnalysisScript: Bun.env.PRE_ANALYSIS_SCRIPT || "./scripts/pre-analysis.sh",
+    projectContextFile: Bun.env.PROJECT_CONTEXT_FILE || "",
   };
 }

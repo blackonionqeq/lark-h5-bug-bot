@@ -228,6 +228,66 @@ describe("runClaudeAnalysis", () => {
     expect(await pathExists(join(tmpdir(), `${taskId}-prompt.txt`))).toBe(false);
   });
 
+  it("combines the shared template with an explicitly configured project context", async () => {
+    const taskId = `runner-project-context-${crypto.randomUUID()}`;
+    const logDir = await createLogDir();
+    const projectContextFile = join(logDir, "project-context.md");
+    await Bun.write(projectContextFile, "优先读取项目内的 checkout-flow Skill。\n");
+    const config = makeWorkerConfig({ logDir, projectContextFile });
+    let command: string[] | undefined;
+
+    await runClaudeAnalysis(
+      "结算页白屏",
+      "点击提交订单后页面白屏",
+      taskId,
+      config,
+      {
+        spawn: (spawnCommand) => {
+          command = spawnCommand;
+          return {
+            exited: Promise.resolve(0),
+            stdout: streamFromText(resultEvent(JSON.stringify({ status: "resolved", summary: "done", reason: "found", files: [] }))),
+            stderr: streamFromText(""),
+            kill: mock(() => {}),
+          };
+        },
+        setTimeoutFn: () => ({ id: "timeout-project-context" }),
+        clearTimeoutFn: mock(() => {}),
+      }
+    );
+
+    const prompt = command?.[2] ?? "";
+    expect(prompt).toContain("## 项目补充说明");
+    expect(prompt).toContain("checkout-flow Skill");
+    expect(prompt).toContain("标题：结算页白屏");
+    expect(prompt).toContain("描述：点击提交订单后页面白屏");
+    expect(prompt).not.toContain("{{PROJECT_CONTEXT}}");
+  });
+
+  it("fails before launching an agent when an explicit project context file is missing", async () => {
+    const taskId = `runner-missing-project-context-${crypto.randomUUID()}`;
+    const logDir = await createLogDir();
+    const spawn = mock(() => ({
+      exited: Promise.resolve(0),
+      stdout: streamFromText(""),
+      stderr: streamFromText(""),
+      kill: mock(() => {}),
+    }));
+    const config = makeWorkerConfig({
+      logDir,
+      projectContextFile: join(logDir, "missing-project-context.md"),
+    });
+
+    await expect(runClaudeAnalysis(
+      "配置错误",
+      "项目补充提示词不存在",
+      taskId,
+      config,
+      { spawn }
+    )).rejects.toThrow("无法读取项目补充提示词");
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
   it("runs configured pre-analysis script before Claude", async () => {
     const taskId = `runner-pre-analysis-${crypto.randomUUID()}`;
     const logDir = await createLogDir();
@@ -368,7 +428,8 @@ describe("runClaudeAnalysis", () => {
 
     expect(commands).toHaveLength(2);
     expect(commands[1]?.slice(0, 4)).toEqual(["codex", "--ask-for-approval", "never", "exec"]);
-    expect(commands[1]?.at(-1)).toContain(".codex/agents/bug-investigator.md");
+    expect(commands[1]?.at(-1)).toContain("标题：接口报错");
+    expect(commands[1]?.at(-1)).toBe(commands[0]?.[2]);
     expect(result.status).toBe("resolved");
     expect(result.summary).toBe("codex recovered");
     expect(logPath).toBe(join(logDir, `${taskId}-codex.jsonl`));
@@ -403,7 +464,7 @@ describe("runClaudeAnalysis", () => {
 
     expect(commands).toHaveLength(1);
     expect(commands[0]?.[0]).toBe("codex");
-    expect(commands[0]?.at(-1)).toContain(".codex/agents/bug-investigator.md");
+    expect(commands[0]?.at(-1)).toContain("标题：Codex 优先");
     expect(result.summary).toBe("codex first");
     expect(logPath).toBe(join(logDir, `${taskId}-codex.jsonl`));
   });

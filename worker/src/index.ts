@@ -18,6 +18,7 @@ log("worker", `Claude 模型: ${config.claudeModel}`);
 log("worker", `Claude CLI: ${config.claudeExecutable}`);
 log("worker", `Codex CLI: ${config.codexExecutable}`);
 log("worker", `分析前脚本: ${config.preAnalysisScript}`);
+log("worker", `项目补充提示词: ${config.projectContextFile || "./prompts/project-context.local.md（可选）"}`);
 log("worker", `超时: ${config.timeoutSeconds}s / 最多 ${config.maxTurns} turns`);
 
 let running = false;

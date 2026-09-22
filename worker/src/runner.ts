@@ -63,11 +63,33 @@ const defaultRunnerDeps: RunnerDeps = {
   },
 };
 
-async function buildPrompt(provider: AgentProvider, title: string, description: string): Promise<string> {
-  const templateName = provider === "claude" ? "analyze-bug.txt" : "analyze-bug-codex.txt";
-  const templatePath = fileURLToPath(new URL(`../prompts/${templateName}`, import.meta.url));
+const DEFAULT_PROJECT_CONTEXT_FILE = "./prompts/project-context.local.md";
+
+async function readProjectContext(config: WorkerConfig): Promise<string> {
+  const configuredPath = config.projectContextFile.trim();
+  const contextPath = resolveWorkerPath(configuredPath || DEFAULT_PROJECT_CONTEXT_FILE);
+
+  try {
+    return (await readFile(contextPath, "utf-8")).trim();
+  } catch (err) {
+    const error = err as NodeJS.ErrnoException;
+    if (!configuredPath && error.code === "ENOENT") return "";
+    throw new Error(`无法读取项目补充提示词: ${contextPath}: ${error.message}`);
+  }
+}
+
+export async function buildPrompt(title: string, description: string, config: WorkerConfig): Promise<string> {
+  const templatePath = fileURLToPath(new URL("../prompts/analyze-bug.txt", import.meta.url));
   const template = await readFile(templatePath, "utf-8");
-  return template.replace("{title}", title).replace("{description}", description);
+  const projectContext = await readProjectContext(config);
+  const projectContextSection = projectContext
+    ? `\n## 项目补充说明\n\n${projectContext}\n`
+    : "";
+
+  return template
+    .replace("{{PROJECT_CONTEXT}}", projectContextSection)
+    .replace("{{TITLE}}", title)
+    .replace("{{DESCRIPTION}}", description);
 }
 
 function resolveWorkerPath(path: string): string {
@@ -256,11 +278,11 @@ export async function runAgentAnalysis(
     ...deps,
   };
 
-  const primaryPrompt = await buildPrompt(getProviderOrder(config)[0] ?? "claude", title, description);
+  const prompt = await buildPrompt(title, description, config);
 
   // Write prompt to temp file
   const promptFile = join(tmpdir(), `${taskId}-prompt.txt`);
-  await writeFile(promptFile, primaryPrompt, "utf-8");
+  await writeFile(promptFile, prompt, "utf-8");
 
   // Prepare log directory
   await mkdir(config.logDir, { recursive: true });
@@ -293,7 +315,7 @@ export async function runAgentAnalysis(
     const providers = getProviderOrder(config);
 
     for (const provider of providers) {
-      const promptContent = provider === providers[0] ? await readFile(promptFile, "utf-8") : await buildPrompt(provider, title, description);
+      const promptContent = await readFile(promptFile, "utf-8");
       const run = await runProviderAnalysis(provider, promptContent, taskId, config, runnerDeps);
       runs.push(run);
       if (run.result.status !== "failed") {

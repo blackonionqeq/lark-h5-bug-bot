@@ -53,7 +53,8 @@
     │   ├── runner.ts        # Agent CLI 调用
     │   └── reporter.ts      # 回调云端
     ├── prompts/
-    │   └── analyze-bug.txt  # 分析 prompt 模板
+    │   ├── analyze-bug.txt                 # 通用分析 prompt 模板
+    │   └── project-context.example.md      # 项目补充提示词示例
     └── package.json
 ```
 
@@ -105,6 +106,8 @@ CODEX_EXECUTABLE=codex
 CODEX_MODEL=
 CODEX_SANDBOX=read-only
 PRE_ANALYSIS_SCRIPT=./scripts/pre-analysis.sh
+# 可选；未设置时尝试读取 worker/prompts/project-context.local.md
+PROJECT_CONTEXT_FILE=
 ```
 
 | 变量 | 必需 | 说明 |
@@ -129,6 +132,26 @@ PRE_ANALYSIS_SCRIPT=./scripts/pre-analysis.sh
 | `CODEX_MODEL` | 可选 | Codex CLI 使用的模型；为空时使用 Codex 默认配置 |
 | `CODEX_SANDBOX` | 可选 | Codex exec sandbox，默认 `read-only` |
 | `PRE_ANALYSIS_SCRIPT` | 可选 | 分析前执行的脚本，默认 `./scripts/pre-analysis.sh`；相对路径按 `worker/` 目录解析，脚本执行时的工作目录仍是 `REPO_PATH` |
+| `PROJECT_CONTEXT_FILE` | 可选 | 项目补充提示词路径；相对路径按 `worker/` 目录解析。显式配置后文件必须存在 |
+
+### 项目提示词配置
+
+Worker 将受版本控制的通用模板与本机项目补充说明组装成最终提示词：
+
+- `worker/prompts/analyze-bug.txt` 维护所有项目共用的只读调查规则、Bug 输入位置和 JSON 输出契约。
+- `worker/prompts/project-context.local.md` 维护当前 `REPO_PATH` 对应项目的 Skill、Agent、模块索引和专属背景。该文件已被 Git 忽略。
+- `worker/prompts/project-context.example.md` 是可提交的填写示例，不会自动注入分析。
+
+首次配置可以复制示例文件，再按目标项目修改：
+
+```bash
+cd worker
+cp prompts/project-context.example.md prompts/project-context.local.md
+```
+
+未配置 `PROJECT_CONTEXT_FILE` 时，Worker 会尝试读取上述默认本地文件；文件不存在则只使用通用模板。设置 `PROJECT_CONTEXT_FILE` 后，路径可以是绝对路径，也可以是相对 `worker/` 的路径；显式指定的文件无法读取时，本次分析会失败并报告配置错误，避免项目上下文被静默遗漏。
+
+Claude 和 Codex 共用组装后的完整提示词，因此 Provider fallback 不会丢失项目背景。项目补充文件不要重复通用 JSON 输出契约，也不要存放密钥。后续经验召回会在同一个组装流程中注入有界的经验摘要。
 
 ---
 
