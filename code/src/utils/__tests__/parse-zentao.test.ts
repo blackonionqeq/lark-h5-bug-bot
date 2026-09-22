@@ -104,6 +104,25 @@ describe("parseZentaoText — 禅道原生格式", () => {
     warn.mockRestore();
   });
 
+  it("commented 事件：禅道的「备注」会作为描述（唯一能带自由文本的字段）", () => {
+    const parsed = parseZentaoText({
+      objectType: "bug",
+      objectID: 9,
+      action: "commented",
+      actor: "admin",
+      comment: "复现步骤：1. 打开列表页；2. 下拉刷新 → 列表不渲染，接口返回 200",
+      text: "admin备注了Bug [#9::[白屏]列表页不渲染](http://z.example.com/bug-view-9.html)",
+    });
+    expect(parsed!.status).toBe("active");
+    expect(parsed!.description).toContain("复现步骤");
+    expect(parsed!.title).toBe("[白屏]列表页不渲染");
+  });
+
+  it("bugconfirmed 也算进行中，不会落到「未知 action」", () => {
+    const parsed = parseZentaoText({ objectID: 10, action: "bugconfirmed", text: "" });
+    expect(parsed!.status).toBe("active");
+  });
+
   it("不带 scheme 的链接会补上 http://", () => {
     const parsed = parseZentaoText({
       objectID: 6,

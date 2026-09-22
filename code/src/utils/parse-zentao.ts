@@ -25,13 +25,15 @@ import type { ZentaoParsedFields, ZentaoWebhookPayload } from "../types";
 /** 禅道原生 text 里的通知行：`admin创建了Bug [#5::标题](链接)` */
 const NATIVE_LINK_RE = /\[#(\d+)::([\s\S]*?)\]\(([^)]*)\)/;
 
-/** 等价于「进行中」的 action → 会入队分析 */
+/** 等价于「进行中」的 action → 会入队分析（覆盖禅道 bug 的全部动作：opened/edited/
+ *  commented/assigned/confirmed/bugconfirmed/resolved/closed/activated） */
 const ACTIVE_ACTIONS = new Set([
   "opened",
   "edited",
   "assigned",
   "activated",
   "confirmed",
+  "bugconfirmed",
   "commented",
   "comment",
 ]);
