@@ -4,7 +4,9 @@ import { resolveRepoPath } from "../config";
 
 describe("resolveRepoPath", () => {
   it("resolves relative paths from the repository root", () => {
-    expect(resolveRepoPath("../my-md-reader")).toBe(resolve(import.meta.dir, "../../../../my-md-reader"));
+    expect(resolveRepoPath("test-fixtures/frontend-project")).toBe(
+      resolve(import.meta.dir, "../../../test-fixtures/frontend-project")
+    );
   });
 
   it("keeps absolute paths unchanged", () => {
