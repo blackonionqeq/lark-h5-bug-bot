@@ -24,6 +24,8 @@ async function getTenantAccessToken(appID: string, appSecret: string): Promise<s
   );
 
   if (!response.ok) {
+    const body = await response.text();
+    console.error("ERROR: 获取 tenant_access_token 失败", response.status, body);
     throw new Error(`Error getting tenant_access_token: HTTP ${response.status}`);
   }
 
@@ -64,6 +66,10 @@ export async function sendMessageToChat(
   });
 
   if (!response.ok) {
+    // 飞书把错误码/说明/一键申请链接都放在响应体里（例如权限缺失的 99991672），
+    // 以前这里直接丢掉 body 只抛 HTTP 状态码，线上排查时看不到任何原因。
+    const body = await response.text();
+    console.error("ERROR: 发送消息失败", response.status, body);
     throw new Error(`Error sending message: HTTP ${response.status}`);
   }
 
