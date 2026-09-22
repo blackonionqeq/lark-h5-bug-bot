@@ -120,7 +120,7 @@ PROJECT_CONTEXT_FILE=
 | `PORT` | 可选 | 云端监听端口，默认 `3000` |
 | `AGENT_API_TOKEN` | 推荐 | Worker API 鉴权 token，未设置时 Agent API 不鉴权 |
 | `CLOUD_URL` | Worker 必需 | 云端服务地址 |
-| `REPO_PATH` | Worker 必需 | 待分析的前端项目路径 |
+| `REPO_PATH` | Worker 必需 | 待分析的前端项目路径；相对路径按仓库根目录（根目录 `.env` 所在目录）解析 |
 | `AGENT_API_TOKEN` | Worker 必需 | 同上，Worker 用于请求云端 |
 | `LOG_DIR` | 可选 | Worker 日志目录，默认 `./logs` |
 | `POLL_INTERVAL_MS` | 可选 | 轮询间隔（ms），默认 `20000` |

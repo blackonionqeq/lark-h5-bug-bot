@@ -1,5 +1,8 @@
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const REPOSITORY_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 
 function requireEnv(name: string): string {
   const value = Bun.env[name];
@@ -30,6 +33,18 @@ export interface WorkerConfig {
 }
 
 export type AgentProvider = "claude" | "codex";
+
+export function resolveRepoPath(repoPath: string): string {
+  return isAbsolute(repoPath) ? repoPath : resolve(REPOSITORY_ROOT, repoPath);
+}
+
+function requireRepoPath(): string {
+  const repoPath = resolveRepoPath(requireEnv("REPO_PATH"));
+  if (!existsSync(repoPath)) {
+    throw new Error(`REPO_PATH directory does not exist: ${repoPath}`);
+  }
+  return repoPath;
+}
 
 function getDefaultBashExecutable(): string {
   if (process.platform !== "win32") return Bun.which("bash") || "bash";
@@ -109,7 +124,7 @@ export function getConfig(overrides?: Partial<WorkerConfig>): WorkerConfig {
   return {
     cloudUrl: requireEnv("CLOUD_URL"),
     agentApiToken: requireEnv("AGENT_API_TOKEN"),
-    repoPath: requireEnv("REPO_PATH"),
+    repoPath: requireRepoPath(),
     logDir: Bun.env.LOG_DIR || "./logs",
     pollIntervalMs: Number(Bun.env.POLL_INTERVAL_MS) || 20000,
     maxTurns: Number(Bun.env.MAX_TURNS) || 40,
