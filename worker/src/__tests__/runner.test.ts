@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, access } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it, expect, afterEach, mock } from "bun:test";
-import { extractCodexResult, extractResult, runClaudeAnalysis } from "../runner";
+import { buildPreAnalysisCommand, extractCodexResult, extractResult, runClaudeAnalysis } from "../runner";
 import { makeWorkerConfig } from "../test-fixtures";
 
 function streamFromText(text: string): ReadableStream<Uint8Array> {
@@ -30,6 +30,15 @@ function resultEvent(json: string): string {
 function codexMessageEvent(text: string): string {
   return JSON.stringify({ type: "item.completed", item: { id: "item_0", type: "agent_message", text } }) + "\n";
 }
+
+describe("buildPreAnalysisCommand", () => {
+  it("runs shell scripts through bash for Windows compatibility", () => {
+    expect(buildPreAnalysisCommand("C:\\worker\\scripts\\pre-analysis.sh")).toEqual([
+      "bash",
+      "C:\\worker\\scripts\\pre-analysis.sh",
+    ]);
+  });
+});
 
 describe("extractResult", () => {
   it("extracts suspected result from JSONL", () => {

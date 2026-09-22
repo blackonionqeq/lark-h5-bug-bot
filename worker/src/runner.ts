@@ -43,7 +43,7 @@ const defaultRunnerDeps: RunnerDeps = {
     return Bun.spawn(command, options);
   },
   async runPreAnalysisScript(scriptPath, cwd) {
-    const proc = Bun.spawn([scriptPath], {
+    const proc = Bun.spawn(buildPreAnalysisCommand(scriptPath), {
       cwd,
       stdout: "pipe",
       stderr: "pipe",
@@ -62,6 +62,10 @@ const defaultRunnerDeps: RunnerDeps = {
     clearTimeout(timeoutHandle as ReturnType<typeof setTimeout>);
   },
 };
+
+export function buildPreAnalysisCommand(scriptPath: string): string[] {
+  return ["bash", scriptPath];
+}
 
 const DEFAULT_PROJECT_CONTEXT_FILE = "./prompts/project-context.local.md";
 
@@ -290,27 +294,26 @@ export async function runAgentAnalysis(
   log("runner", `启动分析, taskId=${taskId}`);
   log("runner", `工作目录: ${config.repoPath}`);
   log("runner", `Agent 顺序: ${getProviderOrder(config).join(" -> ")}`);
-  if (config.preAnalysisScript) {
-    const preAnalysisScript = resolveWorkerPath(config.preAnalysisScript);
-    log("runner", `执行分析前脚本: ${preAnalysisScript}`);
-    const preAnalysis = await runnerDeps.runPreAnalysisScript(preAnalysisScript, config.repoPath);
-    if (preAnalysis.stdout) log("runner", `分析前脚本 stdout: ${preAnalysis.stdout.slice(0, 500)}`);
-    if (preAnalysis.stderr) error("runner", `分析前脚本 stderr: ${preAnalysis.stderr.slice(0, 500)}`);
-    if (preAnalysis.exitCode !== 0) {
-      await unlink(promptFile);
-      return {
-        result: {
-          status: "failed",
-          summary: `分析前脚本异常退出 (${preAnalysis.exitCode})`,
-          reason: (preAnalysis.stderr || preAnalysis.stdout).slice(0, 500),
-          files: [],
-        },
-        logPath: join(config.logDir, `${taskId}-claude.jsonl`),
-      };
-    }
-  }
-
   try {
+    if (config.preAnalysisScript) {
+      const preAnalysisScript = resolveWorkerPath(config.preAnalysisScript);
+      log("runner", `执行分析前脚本: ${preAnalysisScript}`);
+      const preAnalysis = await runnerDeps.runPreAnalysisScript(preAnalysisScript, config.repoPath);
+      if (preAnalysis.stdout) log("runner", `分析前脚本 stdout: ${preAnalysis.stdout.slice(0, 500)}`);
+      if (preAnalysis.stderr) error("runner", `分析前脚本 stderr: ${preAnalysis.stderr.slice(0, 500)}`);
+      if (preAnalysis.exitCode !== 0) {
+        return {
+          result: {
+            status: "failed",
+            summary: `分析前脚本异常退出 (${preAnalysis.exitCode})`,
+            reason: (preAnalysis.stderr || preAnalysis.stdout).slice(0, 500),
+            files: [],
+          },
+          logPath: join(config.logDir, `${taskId}-claude.jsonl`),
+        };
+      }
+    }
+
     const runs: AgentRunResult[] = [];
     const providers = getProviderOrder(config);
 

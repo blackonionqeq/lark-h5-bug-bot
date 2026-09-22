@@ -131,7 +131,7 @@ PROJECT_CONTEXT_FILE=
 | `CODEX_EXECUTABLE` | 可选 | Codex CLI 可执行文件名或绝对路径，默认 `codex` |
 | `CODEX_MODEL` | 可选 | Codex CLI 使用的模型；为空时使用 Codex 默认配置 |
 | `CODEX_SANDBOX` | 可选 | Codex exec sandbox，默认 `read-only` |
-| `PRE_ANALYSIS_SCRIPT` | 可选 | 分析前执行的脚本，默认 `./scripts/pre-analysis.sh`；相对路径按 `worker/` 目录解析，脚本执行时的工作目录仍是 `REPO_PATH` |
+| `PRE_ANALYSIS_SCRIPT` | 可选 | 分析前通过 Bash 执行的脚本，默认 `./scripts/pre-analysis.sh`；相对路径按 `worker/` 目录解析，脚本执行时的工作目录仍是 `REPO_PATH`；Windows 需安装 Git Bash 并将 `bash` 加入 PATH |
 | `PROJECT_CONTEXT_FILE` | 可选 | 项目补充提示词路径；相对路径按 `worker/` 目录解析。显式配置后文件必须存在 |
 
 ### 项目提示词配置
