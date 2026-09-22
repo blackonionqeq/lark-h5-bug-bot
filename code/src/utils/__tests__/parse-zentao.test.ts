@@ -60,6 +60,46 @@ describe("parseZentaoText — 标签文本格式", () => {
 });
 
 describe("parseZentaoText — 禅道原生格式", () => {
+  it("读取禅道端扩展注入的 Bug 实体字段", () => {
+    const parsed = parseZentaoText({
+      objectType: "bug",
+      objectID: 12,
+      action: "opened",
+      actor: "admin",
+      title: "列表页白屏",
+      steps: "<p>打开列表页后页面白屏</p>",
+      status: "active",
+      pri: 2,
+      severity: 1,
+      openedBy: "tester",
+      assignedTo: "dev",
+      text: "admin创建了Bug [#12::列表页白屏](http://zentao.example.com/bug-view-12.html)",
+    });
+
+    expect(parsed).toMatchObject({
+      bugId: "12",
+      title: "列表页白屏",
+      steps: "<p>打开列表页后页面白屏</p>",
+      status: "active",
+      priority: "2",
+      severity: "1",
+      creator: "tester",
+      assignee: "dev",
+    });
+  });
+
+  it("扩展 status 不覆盖旧版 action 状态语义", () => {
+    const parsed = parseZentaoText({
+      objectType: "bug",
+      objectID: 13,
+      action: "resolved",
+      status: "active",
+      text: "admin解决了Bug [#13::已解决问题](http://zentao.example.com/bug-view-13.html)",
+    });
+
+    expect(parsed?.status).toBe("resolved");
+  });
+
   it("opened → status 归一为 active（会入队）", () => {
     const parsed = parseZentaoText(NATIVE_OPENED);
     expect(parsed).not.toBeNull();

@@ -121,12 +121,17 @@ function parseNativeFormat(payload: ZentaoWebhookPayload, text: string): Partial
 
   return {
     bugId,
-    title: first(linkMatch?.[2], fallbackTitle),
-    status: mapActionToStatus(raw.action),
-    creator: action === "opened" ? actor : "",
+    title: first(raw.title, linkMatch?.[2], fallbackTitle),
+    // 保持旧版行为：action 决定是否入队；扩展 status 只在 action 缺失时兜底。
+    status: first(mapActionToStatus(raw.action), raw.status),
+    priority: first(raw.pri, raw.priority),
+    severity: first(raw.severity),
+    creator: first(raw.openedBy, action === "opened" ? actor : ""),
     operator: actor,
+    assignee: first(raw.assignedTo, raw.assignee),
     link: linkMatch?.[3],
     description: comment,
+    steps: first(raw.steps),
   };
 }
 
@@ -157,7 +162,7 @@ export function parseZentaoText(payload: ZentaoWebhookPayload): ZentaoParsedFiel
   if (!merged.bugId) return null;
 
   const description = first(fromLabels.description, fromNative.description);
-  const steps = first(fromLabels.steps);
+  const steps = first(fromLabels.steps, fromNative.steps);
   const expected = first(fromLabels.expected);
   const actual = first(fromLabels.actual);
 

@@ -41,6 +41,14 @@ export interface ZentaoWebhookPayload extends Record<string, unknown> {
   actor?: string;
   comment?: string;
   date?: string;
+  /** 本项目对禅道通用 Webhook 的本地扩展字段。 */
+  title?: string;
+  steps?: string;
+  status?: string;
+  pri?: string | number;
+  severity?: string | number;
+  openedBy?: string;
+  assignedTo?: string;
 }
 
 /** Parsed fields extracted from Zentao webhook text */
