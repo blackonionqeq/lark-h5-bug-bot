@@ -32,9 +32,12 @@ function codexMessageEvent(text: string): string {
 }
 
 describe("buildPreAnalysisCommand", () => {
-  it("runs shell scripts through bash for Windows compatibility", () => {
-    expect(buildPreAnalysisCommand("C:\\worker\\scripts\\pre-analysis.sh")).toEqual([
-      "bash",
+  it("runs shell scripts through the configured Bash executable", () => {
+    expect(buildPreAnalysisCommand(
+      "C:\\Program Files\\Git\\bin\\bash.exe",
+      "C:\\worker\\scripts\\pre-analysis.sh"
+    )).toEqual([
+      "C:\\Program Files\\Git\\bin\\bash.exe",
       "C:\\worker\\scripts\\pre-analysis.sh",
     ]);
   });
@@ -328,7 +331,8 @@ describe("runClaudeAnalysis", () => {
 
     expect(runPreAnalysisScript).toHaveBeenCalledWith(
       expect.stringContaining(join("worker", "scripts", "pre-analysis.sh")),
-      config.repoPath
+      config.repoPath,
+      config.bashExecutable
     );
     expect(spawn).toHaveBeenCalledTimes(1);
   });

@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+
 function requireEnv(name: string): string {
   const value = Bun.env[name];
   if (!value) {
@@ -22,10 +25,28 @@ export interface WorkerConfig {
   enableCodexFallback: boolean;
   agentProviderOrder: AgentProvider[];
   preAnalysisScript: string;
+  bashExecutable: string;
   projectContextFile: string;
 }
 
 export type AgentProvider = "claude" | "codex";
+
+function getDefaultBashExecutable(): string {
+  if (process.platform !== "win32") return Bun.which("bash") || "bash";
+
+  const candidates = [
+    join(process.env.ProgramFiles || "C:\\Program Files", "Git", "bin", "bash.exe"),
+    join(process.env.ProgramFiles || "C:\\Program Files", "Git", "usr", "bin", "bash.exe"),
+    process.env["ProgramFiles(x86)"]
+      ? join(process.env["ProgramFiles(x86)"], "Git", "bin", "bash.exe")
+      : "",
+    process.env.LOCALAPPDATA
+      ? join(process.env.LOCALAPPDATA, "Programs", "Git", "bin", "bash.exe")
+      : "",
+  ];
+
+  return candidates.find((candidate) => candidate && existsSync(candidate)) || Bun.which("bash") || "bash";
+}
 
 function parseAgentProviderOrder(value: string): AgentProvider[] {
   const providers = value
@@ -67,6 +88,7 @@ export function getConfig(overrides?: Partial<WorkerConfig>): WorkerConfig {
     enableCodexFallback: true,
     agentProviderOrder: ["codex", "claude"],
     preAnalysisScript: "./scripts/pre-analysis.sh",
+    bashExecutable: getDefaultBashExecutable(),
     projectContextFile: "",
   };
 
@@ -100,6 +122,7 @@ export function getConfig(overrides?: Partial<WorkerConfig>): WorkerConfig {
     enableCodexFallback,
     agentProviderOrder,
     preAnalysisScript: Bun.env.PRE_ANALYSIS_SCRIPT || "./scripts/pre-analysis.sh",
+    bashExecutable: Bun.env.BASH_EXECUTABLE || getDefaultBashExecutable(),
     projectContextFile: Bun.env.PROJECT_CONTEXT_FILE || "",
   };
 }

@@ -18,6 +18,7 @@ export function makeWorkerConfig(overrides?: Partial<WorkerConfig>): WorkerConfi
     enableCodexFallback: true,
     agentProviderOrder: ["claude", "codex"],
     preAnalysisScript: "",
+    bashExecutable: "bash",
     projectContextFile: "",
     ...overrides,
   };

@@ -33,7 +33,7 @@ type AgentRunResult = {
 
 export interface RunnerDeps {
   spawn(command: string[], options: SpawnOptions): SpawnedProcess;
-  runPreAnalysisScript(scriptPath: string, cwd: string): Promise<PreAnalysisResult>;
+  runPreAnalysisScript(scriptPath: string, cwd: string, bashExecutable: string): Promise<PreAnalysisResult>;
   setTimeoutFn(callback: () => void, ms: number): unknown;
   clearTimeoutFn(timeoutHandle: unknown): void;
 }
@@ -42,8 +42,8 @@ const defaultRunnerDeps: RunnerDeps = {
   spawn(command, options) {
     return Bun.spawn(command, options);
   },
-  async runPreAnalysisScript(scriptPath, cwd) {
-    const proc = Bun.spawn(buildPreAnalysisCommand(scriptPath), {
+  async runPreAnalysisScript(scriptPath, cwd, bashExecutable) {
+    const proc = Bun.spawn(buildPreAnalysisCommand(bashExecutable, scriptPath), {
       cwd,
       stdout: "pipe",
       stderr: "pipe",
@@ -63,8 +63,8 @@ const defaultRunnerDeps: RunnerDeps = {
   },
 };
 
-export function buildPreAnalysisCommand(scriptPath: string): string[] {
-  return ["bash", scriptPath];
+export function buildPreAnalysisCommand(bashExecutable: string, scriptPath: string): string[] {
+  return [bashExecutable, scriptPath];
 }
 
 const DEFAULT_PROJECT_CONTEXT_FILE = "./prompts/project-context.local.md";
@@ -298,7 +298,12 @@ export async function runAgentAnalysis(
     if (config.preAnalysisScript) {
       const preAnalysisScript = resolveWorkerPath(config.preAnalysisScript);
       log("runner", `执行分析前脚本: ${preAnalysisScript}`);
-      const preAnalysis = await runnerDeps.runPreAnalysisScript(preAnalysisScript, config.repoPath);
+      log("runner", `Bash 可执行文件: ${config.bashExecutable}`);
+      const preAnalysis = await runnerDeps.runPreAnalysisScript(
+        preAnalysisScript,
+        config.repoPath,
+        config.bashExecutable
+      );
       if (preAnalysis.stdout) log("runner", `分析前脚本 stdout: ${preAnalysis.stdout.slice(0, 500)}`);
       if (preAnalysis.stderr) error("runner", `分析前脚本 stderr: ${preAnalysis.stderr.slice(0, 500)}`);
       if (preAnalysis.exitCode !== 0) {
