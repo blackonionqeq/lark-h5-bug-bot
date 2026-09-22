@@ -31,9 +31,16 @@ export interface AppConfig {
   userMentions: Record<string, string>;
 }
 
-/** Raw payload from Zentao webhook — contains only a formatted text field */
+/** Raw payload from Zentao webhook — 既可能是自定义模板的纯 text，也可能是禅道原生字段 */
 export interface ZentaoWebhookPayload extends Record<string, unknown> {
   text?: string;
+  /** 以下为禅道原生 webhook 的固定字段（标准禅道会一并发送） */
+  objectType?: string;
+  objectID?: string | number;
+  action?: string;
+  actor?: string;
+  comment?: string;
+  date?: string;
 }
 
 /** Parsed fields extracted from Zentao webhook text */

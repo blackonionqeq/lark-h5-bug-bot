@@ -129,3 +129,81 @@ describe("POST /webhook/zentao", () => {
     expect(res.status).toBe(500);
   });
 });
+
+/** 标准禅道原生 payload（2026-09-22 从用户本地禅道实抓，原来是解析失败的那条） */
+const NATIVE_OPENED_PAYLOAD = {
+  objectType: "bug",
+  objectID: 5,
+  product: ",1,",
+  action: "opened",
+  actor: "admin",
+  date: "2026-09-22 23:09:16",
+  comment: "",
+  text: "admin创建了Bug [#5::[白屏]agent连通性测试](http://100.98.41.37/zentao/bug-view-5.html)",
+};
+
+describe("POST /webhook/zentao — 禅道原生格式", () => {
+  let fetchSpy: ReturnType<typeof spyOn>;
+
+  beforeEach(() => {
+    let task = taskStore.claim();
+    while (task) task = taskStore.claim();
+    fetchSpy = mockFetch(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ code: 0, msg: "ok", tenant_access_token: "fake-token", data: {} }))
+      )
+    );
+  });
+
+  afterEach(() => {
+    fetchSpy?.mockRestore();
+  });
+
+  it("解析成功并发飞书通知（原来返回 success:false）", async () => {
+    const app = createZentaoRouter(makeAppConfig());
+    const res = await app.handle(
+      new Request("http://localhost/webhook/zentao", {
+        method: "POST",
+        body: JSON.stringify(NATIVE_OPENED_PAYLOAD),
+        headers: { "content-type": "application/json" },
+      })
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.success).toBe(true);
+  });
+
+  it("opened 事件入队，且编号/标题来自原生字段", async () => {
+    const app = createZentaoRouter(makeAppConfig());
+    await app.handle(
+      new Request("http://localhost/webhook/zentao", {
+        method: "POST",
+        body: JSON.stringify(NATIVE_OPENED_PAYLOAD),
+        headers: { "content-type": "application/json" },
+      })
+    );
+
+    const task = taskStore.claim();
+    expect(task).not.toBeNull();
+    expect(task!.issueId).toBe("5");
+    expect(task!.title).toBe("[白屏]agent连通性测试");
+    expect(task!.description).toContain("状态: active");
+    expect(task!.description).toContain("http://100.98.41.37/zentao/bug-view-5.html");
+  });
+
+  it("resolved 事件只通知不入队", async () => {
+    const app = createZentaoRouter(makeAppConfig());
+    const res = await app.handle(
+      new Request("http://localhost/webhook/zentao", {
+        method: "POST",
+        body: JSON.stringify({ ...NATIVE_OPENED_PAYLOAD, action: "resolved" }),
+        headers: { "content-type": "application/json" },
+      })
+    );
+
+    expect(res.status).toBe(200);
+    expect((await res.json()).success).toBe(true);
+    expect(taskStore.claim()).toBeNull();
+  });
+});

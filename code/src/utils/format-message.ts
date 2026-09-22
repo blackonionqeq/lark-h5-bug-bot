@@ -58,9 +58,23 @@ export function formatMessage(event: AppEvent, userMentions?: Record<string, str
     const emoji = statusEmoji[parsed.status] ?? "🟡";
 
     const lines: string[] = [];
-    lines.push(`${emoji} 禅道 Bug #${parsed.bugId} — ${parsed.title}`);
-    lines.push(`状态: ${parsed.status} | 优先级: ${parsed.priority} | 严重程度: ${parsed.severity}`);
-    lines.push(`创建人: ${parsed.creator} → 操作人: ${parsed.operator} → 指派人: ${mentionUser(parsed.assignee, userMentions)}`);
+    lines.push(`${emoji} 禅道 Bug #${parsed.bugId}${parsed.title ? ` — ${parsed.title}` : ""}`);
+
+    // 禅道原生 payload 不含优先级/严重程度/指派人，空字段不占位
+    const metaParts = [
+      parsed.status && `状态: ${parsed.status}`,
+      parsed.priority && `优先级: ${parsed.priority}`,
+      parsed.severity && `严重程度: ${parsed.severity}`,
+    ].filter(Boolean);
+    if (metaParts.length > 0) lines.push(metaParts.join(" | "));
+
+    const peopleParts = [
+      parsed.creator && `创建人: ${parsed.creator}`,
+      parsed.operator && `操作人: ${parsed.operator}`,
+      parsed.assignee && `指派人: ${mentionUser(parsed.assignee, userMentions)}`,
+    ].filter(Boolean);
+    if (peopleParts.length > 0) lines.push(peopleParts.join(" → "));
+
     if (parsed.description) lines.push(`描述: ${parsed.description}`);
     if (parsed.steps) lines.push(`重现步骤: ${parsed.steps}`);
     if (parsed.expected) lines.push(`期望结果: ${parsed.expected}`);

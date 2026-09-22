@@ -191,16 +191,26 @@ pnpm healthcheck  # 手动诊断 Worker 到 CLOUD_URL 的 DNS/代理/HTTP 连通
 
 当前行为：所有禅道 bug webhook 都会通知到飞书群；仅 `active` 状态的 bug 会进入自动分析队列，非 `active` 状态不会进入队列。
 
+支持两种 payload 形态，任选其一：
 
-```http
-POST /webhook/zentao
-```
+**① 禅道原生格式**（标准禅道开箱即用，`action` 会映射成内部状态：`opened`/`edited`/`assigned`/… → `active` 入队，`resolved`/`closed`/`deleted` → 只通知不入队）
 
 ```bash
 curl -X POST "http://127.0.0.1:3000/webhook/zentao" \
   -H "Content-Type: application/json" \
-  -d '{"id":"BUG-123","title":"登录失败","description":"点击登录按钮后白屏"}'
+  -d '{"objectType":"bug","objectID":5,"product":",1,","action":"opened","actor":"admin","date":"2026-09-22 23:09:16","comment":"","text":"admin创建了Bug [#5::[白屏]页面白屏](http://zentao.example.com/bug-view-5.html)"}'
 ```
+
+**② 自定义「标签文本」格式**（禅道 webhook 内容模板改成下面的样子，字段最全，标签优先级高于原生字段）
+
+```bash
+curl -X POST "http://127.0.0.1:3000/webhook/zentao" \
+  -H "Content-Type: application/json" \
+  -d '{"text":"📝 BUG标题：页面白屏\n🆔 BUG编号：#80407\n📊 BUG状态：active\n📋 重现步骤：1. 登录\n2. 进入首页\n🔗 详情链接：http://zentao.example.com/bug-view-80407.html"}'
+```
+
+> ⚠️ 两种形态下**都必须能解析出 BUG 编号**（原生看 `objectID`，标签看 `BUG编号`），否则返回
+> `{"success":false,"message":"无法解析禅道 webhook 内容"}`，并且**禅道 webhook 日志会原样显示这个响应体**。
 
 ### 分析结果回调
 
