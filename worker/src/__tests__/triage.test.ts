@@ -112,5 +112,17 @@ describe("triage", () => {
       expect(result.matchedRules!.length).toBe(2);
       expect(result.matchedRules!.every(r => r.startsWith("frontend:"))).toBe(true);
     });
+
+    it("中文规则名保持可读，不出现 \\uXXXX 转义（Bun 转译正则字面量的副作用）", () => {
+      const result = triage("用户列表接口返回字段缺失", "后端日志正常，疑似 SQL 查询漏了字段");
+
+      expect(result.label).toBe("non-frontend");
+      expect(result.matchedRules).toContain("backend:接口");
+      expect(result.matchedRules).toContain("backend:后端");
+      expect(result.reason).toContain("backend:接口");
+      for (const rule of result.matchedRules!) {
+        expect(rule).not.toMatch(/\\u[0-9a-fA-F]{4}/);
+      }
+    });
   });
 });
