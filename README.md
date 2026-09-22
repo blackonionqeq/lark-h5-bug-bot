@@ -297,3 +297,4 @@ scp lark-h5-bug-bot.tar.gz your-user@your-server:/opt/
 
 - 架构设计 v3：`docs/architecture-proposal-v3.md`
 - Claude Code 调用规范：`docs/worker-claude-invocation.md`
+- 禅道 Bug 完整字段接入方案：`docs/zentao-bug-field-enrichment.md`
