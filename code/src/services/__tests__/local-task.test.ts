@@ -91,6 +91,40 @@ describe("enqueueTask", () => {
     expect(stored!.description).not.toContain("严重程度:");
   });
 
+  it("禅道补了扩展字段（steps）时，不再误报「未提供复现步骤」", () => {
+    const withSteps: ZentaoParsedFields = {
+      bugId: "8",
+      title: "[白屏]列表页白屏",
+      status: "active",
+      priority: "3",
+      severity: "3",
+      creator: "admin",
+      operator: "admin",
+      assignee: "李四",
+      steps: "1. 打开列表页\n2. 下拉刷新",
+      link: "http://zentao.example.com/bug-view-8.html",
+    };
+
+    const event = makeAppEvent({
+      type: "zentao.webhook.received",
+      traceId: "trace-steps-test",
+      payload: { ...makeZentaoPayload(), _parsed: withSteps },
+      meta: { issueId: "8" },
+    });
+
+    enqueueTask(event);
+
+    const stored = taskStore.get("trace-steps-test");
+    expect(stored!.description).toBe(
+      [
+        "状态: active | 优先级: 3 | 严重程度: 3",
+        "重现步骤: 1. 打开列表页\n2. 下拉刷新",
+        "http://zentao.example.com/bug-view-8.html",
+      ].join("\n")
+    );
+    expect(stored!.description).not.toContain("未提供描述与复现步骤");
+  });
+
   it("handles payload without _parsed gracefully", () => {
     const event = makeAppEvent({
       type: "zentao.webhook.received",
