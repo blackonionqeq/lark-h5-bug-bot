@@ -240,10 +240,12 @@ POST /agent/tasks/:id/result    # 提交中间/最终状态
 
 ## 五、部署
 
-### 推荐目录结构
+### 目录结构
+
+仓库根目录下必须有这三项（放哪个绝对路径都行）—— `.env` 在根目录，两端脚本都以 `--env-file ../.env` 读它：
 
 ```bash
-/opt/lark-h5-bug-bot/
+.
 ├── .env
 ├── code/       # 云端服务
 └── worker/     # 本地 Worker（可部署在不同机器）
@@ -255,21 +257,23 @@ POST /agent/tasks/:id/result    # 提交中间/最终状态
 
 ### 云端
 
+在仓库根目录下执行：
+
 ```bash
-cd /opt/lark-h5-bug-bot/code
+cd code
 pnpm install && pnpm start
 ```
 
 ### Worker
 
 ```bash
-cd /opt/lark-h5-bug-bot/worker
+cd worker
 pnpm install && pnpm start
 ```
 
 ### 后台运行
 
-仓库自带 `ecosystem.config.cjs`（两个 app：`lark-h5-bug-bot-cloud`、`lark-h5-bug-bot-worker`）和 `scripts/worker-pm2.sh`（只管理 Worker 的常用命令）：
+仓库自带 `ecosystem.config.cjs`（两个 app：`lark-h5-bug-bot-cloud`、`lark-h5-bug-bot-worker`；内部用 `__dirname` 定位 `code/`、`worker/`，所以仓库放哪都行）和 `scripts/worker-pm2.sh`（只管理 Worker 的常用命令）。在仓库根目录下执行：
 
 ```bash
 # 云端 + Worker 都拉起
@@ -291,8 +295,9 @@ pm2 start ecosystem.config.cjs --only lark-h5-bug-bot-cloud
 ### 打包上传
 
 ```bash
+# 在仓库根目录执行
 tar --exclude='*/node_modules' --exclude='.git' --exclude='.env' -czf lark-h5-bug-bot.tar.gz .
-scp lark-h5-bug-bot.tar.gz your-user@your-server:/opt/
+scp lark-h5-bug-bot.tar.gz your-user@your-server:/path/to/deploy/
 ```
 
 `.env` 不入包（含密钥），上传后按上文「环境变量」在仓库根目录单独创建。

@@ -119,10 +119,14 @@ Task status and analysis conclusion are two independent dimensions.
 ## Deployment assumptions
 
 ```bash
-/opt/lark-h5-bug-bot/
+.             # repo root — any absolute path works
 ├── .env
 ├── code/       # cloud service
 └── worker/     # can be on a different machine
 ```
+
+What matters is the layout, not the location: the repo root can live at any absolute
+path, but `.env` must sit at the root because both sides are started with
+`--env-file ../.env`.
 
 Worker only makes outbound HTTPS requests to the cloud. No inbound connections or tunneling needed.
