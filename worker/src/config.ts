@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { isAbsolute, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPOSITORY_ROOT = fileURLToPath(new URL("../..", import.meta.url));
@@ -30,6 +30,9 @@ export interface WorkerConfig {
   preAnalysisScript: string;
   bashExecutable: string;
   projectContextFile: string;
+  fixWorktreeRoot: string;
+  gitAuthorName: string;
+  gitAuthorEmail: string;
 }
 
 export type AgentProvider = "claude" | "codex";
@@ -105,6 +108,9 @@ export function getConfig(overrides?: Partial<WorkerConfig>): WorkerConfig {
     preAnalysisScript: "./scripts/pre-analysis.sh",
     bashExecutable: getDefaultBashExecutable(),
     projectContextFile: "",
+    fixWorktreeRoot: resolve(REPOSITORY_ROOT, ".bugbot-workspaces"),
+    gitAuthorName: "BugBot",
+    gitAuthorEmail: "bugbot@local",
   };
 
   if (overrides) {
@@ -121,10 +127,16 @@ export function getConfig(overrides?: Partial<WorkerConfig>): WorkerConfig {
       ? defaults.agentProviderOrder
       : (["claude"] satisfies AgentProvider[]);
 
+  const repoPath = requireRepoPath();
+  const configuredWorktreeRoot = Bun.env.FIX_WORKTREE_ROOT;
+  if (configuredWorktreeRoot && !isAbsolute(configuredWorktreeRoot)) {
+    throw new Error("FIX_WORKTREE_ROOT must be an absolute path");
+  }
+
   return {
     cloudUrl: requireEnv("CLOUD_URL"),
     agentApiToken: requireEnv("AGENT_API_TOKEN"),
-    repoPath: requireRepoPath(),
+    repoPath,
     logDir: Bun.env.LOG_DIR || "./logs",
     pollIntervalMs: Number(Bun.env.POLL_INTERVAL_MS) || 20000,
     maxTurns: Number(Bun.env.MAX_TURNS) || 40,
@@ -139,5 +151,8 @@ export function getConfig(overrides?: Partial<WorkerConfig>): WorkerConfig {
     preAnalysisScript: Bun.env.PRE_ANALYSIS_SCRIPT || "./scripts/pre-analysis.sh",
     bashExecutable: Bun.env.BASH_EXECUTABLE || getDefaultBashExecutable(),
     projectContextFile: Bun.env.PROJECT_CONTEXT_FILE || "",
+    fixWorktreeRoot: configuredWorktreeRoot || join(dirname(repoPath), ".bugbot-workspaces"),
+    gitAuthorName: Bun.env.BUGBOT_GIT_NAME || "BugBot",
+    gitAuthorEmail: Bun.env.BUGBOT_GIT_EMAIL || "bugbot@local",
   };
 }

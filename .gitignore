@@ -22,6 +22,7 @@ code/dist/
 code/.turbo/
 code/.cache/
 code/.bun/
+code/data/
 *.tsbuildinfo
 
 # coverage

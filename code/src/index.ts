@@ -3,12 +3,16 @@ import { getConfig } from "./config";
 import { createZentaoRouter } from "./routes/zentao";
 import { createAnalysisCallbackRouter } from "./routes/analysis-callback";
 import { createAgentTasksRouter } from "./routes/agent-tasks";
+import { createFeishuCardCallbackRouter } from "./routes/feishu-card-callback";
+import { configureTaskStore } from "./services/task-store";
 
 const config = getConfig();
+configureTaskStore(config.taskDbPath ?? ":memory:");
 
 const app = new Elysia({ name: "lark-h5-bug-bot" })
   .use(createZentaoRouter(config))
   .use(createAnalysisCallbackRouter(config))
+  .use(createFeishuCardCallbackRouter(config))
   .use(createAgentTasksRouter(config))
   .listen(config.port);
 

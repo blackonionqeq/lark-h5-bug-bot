@@ -4,9 +4,17 @@ import type { AnalysisCallbackPayload, AppConfig } from "../types";
 
 export function createAnalysisCallbackRouter(config: AppConfig) {
   return new Elysia().post("/callback/analysis-result", async (context) => {
-    const { body, set } = context;
+    const { body, set, headers } = context;
 
     try {
+      if (config.agentApiToken) {
+        const authorization = headers.authorization ?? "";
+        const token = authorization.startsWith("Bearer ") ? authorization.slice(7) : authorization;
+        if (token !== config.agentApiToken) {
+          set.status = 401;
+          return { success: false, error: "unauthorized" };
+        }
+      }
       console.log("收到自动查 bug 结果回调");
 
       const payload = (body ?? {}) as AnalysisCallbackPayload;

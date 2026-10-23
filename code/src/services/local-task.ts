@@ -36,6 +36,7 @@ export function enqueueTask(event: AppEvent): { accepted: boolean; taskId?: stri
   const parsed = payload._parsed;
 
   const task: AnalysisTask = {
+    taskType: "analysis.run",
     taskId: event.traceId,
     traceId: event.traceId,
     issueId: event.meta.issueId,

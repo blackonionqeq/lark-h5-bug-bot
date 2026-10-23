@@ -41,6 +41,10 @@ Tests use Bun's built-in `bun:test` runner with hardcoded fixture data — no `.
 - `CHAT_ID`
 - `PORT` — optional, defaults to `3000`
 - `AGENT_API_TOKEN` — optional, enables Bearer auth on `/agent/*` routes
+- `LARK_VERIFICATION_TOKEN` — required for interactive-card callbacks unless signature verification is configured
+- `LARK_ENCRYPT_KEY` — optional, enables `X-Lark-Signature` verification for card callbacks
+- `FIX_ALLOWED_OPEN_IDS` — optional comma-separated allowlist for fix-card operators
+- `TASK_DB_PATH` — optional, defaults to `code/data/tasks.sqlite`
 
 ### Worker (fails fast if missing):
 
@@ -48,7 +52,7 @@ Tests use Bun's built-in `bun:test` runner with hardcoded fixture data — no `.
 - `AGENT_API_TOKEN` — must match cloud config
 - `REPO_PATH` — path to the frontend project to analyze
 
-Optional worker vars: `LOG_DIR`, `POLL_INTERVAL_MS`, `TIMEOUT_SECONDS`, `MAX_TURNS`, `CLAUDE_MODEL`, `CLAUDE_EXECUTABLE`, `PRE_ANALYSIS_SCRIPT`.
+Optional worker vars: `LOG_DIR`, `POLL_INTERVAL_MS`, `TIMEOUT_SECONDS`, `MAX_TURNS`, `CLAUDE_MODEL`, `CLAUDE_EXECUTABLE`, `PRE_ANALYSIS_SCRIPT`, `FIX_WORKTREE_ROOT`, `BUGBOT_GIT_NAME`, `BUGBOT_GIT_EMAIL`.
 
 Config loading is centralized in `code/src/config.ts` (cloud) and `worker/src/config.ts` (worker).
 

@@ -82,3 +82,51 @@ export async function sendMessageToChat(
   console.log("消息发送成功:", result.data);
   return result.data;
 }
+
+export async function sendCardToChat(
+  config: AppConfig,
+  card: Record<string, unknown>
+): Promise<Record<string, unknown> | undefined> {
+  const tenantAccessToken = await getTenantAccessToken(config.appID, config.appSecret);
+  const url = "https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=chat_id";
+  const payload = {
+    receive_id: config.chatID,
+    msg_type: "interactive",
+    content: JSON.stringify(card),
+  };
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${tenantAccessToken}`,
+      "Content-Type": "application/json; charset=utf-8",
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const body = await response.text();
+    console.error("ERROR: 发送卡片失败", response.status, body);
+    throw new Error(`Error sending card: HTTP ${response.status}`);
+  }
+  const result = await parseJsonResponse<FeishuMessageResponse>(response);
+  if (result.code !== 0) throw new Error(`failed to send card: ${result.msg}`);
+  return result.data;
+}
+
+export async function updateCardByToken(
+  config: AppConfig,
+  token: string,
+  card: Record<string, unknown>
+): Promise<void> {
+  const tenantAccessToken = await getTenantAccessToken(config.appID, config.appSecret);
+  const response = await fetch("https://open.feishu.cn/open-apis/im/v1/message-card/delay-update", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${tenantAccessToken}`,
+      "Content-Type": "application/json; charset=utf-8",
+    },
+    body: JSON.stringify({ token, card }),
+  });
+  if (!response.ok) throw new Error(`Error updating card: HTTP ${response.status}`);
+  const result = await parseJsonResponse<FeishuMessageResponse>(response);
+  if (result.code !== 0) throw new Error(`failed to update card: ${result.msg}`);
+}

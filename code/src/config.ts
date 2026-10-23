@@ -1,4 +1,8 @@
 import type { AppConfig } from "./types";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const CODE_ROOT = fileURLToPath(new URL("..", import.meta.url));
 
 function requireEnv(name: string): string {
   const value = Bun.env[name];
@@ -16,6 +20,8 @@ export function getConfig(overrides?: Partial<AppConfig>): AppConfig {
       chatID: "",
       port: 3000,
       userMentions: {},
+      taskDbPath: ":memory:",
+      fixAllowedOpenIds: [],
       ...overrides,
     };
   }
@@ -42,6 +48,10 @@ export function getConfig(overrides?: Partial<AppConfig>): AppConfig {
     chatID: requireEnv("CHAT_ID"),
     port,
     agentApiToken: Bun.env.AGENT_API_TOKEN,
+    taskDbPath: Bun.env.TASK_DB_PATH || resolve(CODE_ROOT, "data", "tasks.sqlite"),
+    larkVerificationToken: Bun.env.LARK_VERIFICATION_TOKEN,
+    larkEncryptKey: Bun.env.LARK_ENCRYPT_KEY,
+    fixAllowedOpenIds: (Bun.env.FIX_ALLOWED_OPEN_IDS ?? "").split(",").map((value) => value.trim()).filter(Boolean),
     userMentions,
   };
 }

@@ -3,6 +3,7 @@ import type { AnalysisResult, TriageResult, AnalysisTask } from "../../code/src/
 
 export async function reportToCallback(
   cloudUrl: string,
+  agentToken: string,
   task: AnalysisTask,
   triageResult: TriageResult,
   analysisResult: AnalysisResult
@@ -23,7 +24,10 @@ export async function reportToCallback(
 
   const res = await fetch(`${cloudUrl}/callback/analysis-result`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${agentToken}`,
+    },
     body: JSON.stringify(payload),
   });
 

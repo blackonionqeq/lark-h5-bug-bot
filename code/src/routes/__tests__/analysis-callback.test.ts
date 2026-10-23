@@ -38,7 +38,7 @@ describe("POST /callback/analysis-result", () => {
           triageSource: "rules",
           files: ["src/a.ts"],
         }),
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", authorization: "Bearer test-agent-token" },
       })
     );
 
@@ -57,7 +57,7 @@ describe("POST /callback/analysis-result", () => {
       new Request("http://localhost/callback/analysis-result", {
         method: "POST",
         body: JSON.stringify({}),
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", authorization: "Bearer test-agent-token" },
       })
     );
 

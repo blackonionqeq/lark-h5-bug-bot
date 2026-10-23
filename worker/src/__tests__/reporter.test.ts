@@ -26,12 +26,13 @@ describe("reportToCallback", () => {
     const triage = makeTriageResult({ label: "frontend" });
     const analysis = makeAnalysisResult({ status: "suspected" });
 
-    await reportToCallback("http://cloud", task, triage, analysis);
+    await reportToCallback("http://cloud", "test-token", task, triage, analysis);
 
     expect((fetchSpy.mock.calls[0][0] as string)).toBe("http://cloud/callback/analysis-result");
 
     const init = fetchSpy.mock.calls[0][1] as RequestInit;
     expect(init.method).toBe("POST");
+    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer test-token");
     const body = JSON.parse(init.body as string);
     expect(body.taskId).toBe("t1");
     expect(body.traceId).toBe("trace-1");
@@ -50,7 +51,7 @@ describe("reportToCallback", () => {
     const analysis = makeAnalysisResult({});
 
     await expect(
-      reportToCallback("http://cloud", task, triage, analysis)
+      reportToCallback("http://cloud", "test-token", task, triage, analysis)
     ).resolves.toBeUndefined();
   });
 });

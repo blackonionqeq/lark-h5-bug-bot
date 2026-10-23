@@ -7,6 +7,7 @@ import type {
   ZentaoWebhookPayload,
   ZentaoParsedFields,
   AnalysisCallbackPayload,
+  FixTask,
 } from "./types";
 
 export function makeAppConfig(overrides?: Partial<AppConfig>): AppConfig {
@@ -17,6 +18,7 @@ export function makeAppConfig(overrides?: Partial<AppConfig>): AppConfig {
     port: 3000,
     agentApiToken: "test-agent-token",
     userMentions: {},
+    fixAllowedOpenIds: [],
     ...overrides,
   };
 }
@@ -100,6 +102,26 @@ export function makeAnalysisResult(overrides?: Partial<AnalysisResult>): Analysi
     summary: "疑似由空值判断缺失导致",
     reason: "在 src/components/Header.tsx 中发现未做 null check",
     files: ["src/components/Header.tsx"],
+    ...overrides,
+  };
+}
+
+export function makeFixTask(overrides?: Partial<FixTask>): FixTask {
+  return {
+    taskType: "fix.run",
+    taskId: "fix-task-001",
+    analysisTaskId: "task-001",
+    traceId: "trace-001",
+    issueId: "BUG-100",
+    projectName: "frontend-project",
+    requestedBy: "ou_user",
+    status: "queued",
+    baseCommitSha: "abc123",
+    title: "页面白屏报错",
+    description: "打开页面后白屏",
+    analysisResult: makeAnalysisResult({ status: "resolved" }),
+    createdAt: "2025-01-01T00:00:00.000Z",
+    updatedAt: "2025-01-01T00:00:00.000Z",
     ...overrides,
   };
 }

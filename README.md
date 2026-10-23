@@ -90,10 +90,22 @@ APP_SECRET=your_app_secret
 CHAT_ID=your_chat_id
 PORT=3000
 AGENT_API_TOKEN=your_secret_token
+# 飞书「事件与回调」页面中的 Verification Token；卡片按钮必需
+LARK_VERIFICATION_TOKEN=your_verification_token
+# 配置飞书 Encrypt Key 时填写，服务端将优先使用原始请求体签名校验
+LARK_ENCRYPT_KEY=
+# 可选；逗号分隔的飞书 open_id 白名单，为空时允许卡片可见成员触发
+FIX_ALLOWED_OPEN_IDS=
+# 可选；默认 code/data/tasks.sqlite
+TASK_DB_PATH=/path/to/bugbot-data/tasks.sqlite
 
 # Worker 专用
 CLOUD_URL=https://your-domain.com
 REPO_PATH=/path/to/frontend-repo
+# 可选；必须是绝对路径，默认 REPO_PATH 同级的 .bugbot-workspaces
+FIX_WORKTREE_ROOT=/path/to/bugbot-workspaces
+BUGBOT_GIT_NAME=BugBot
+BUGBOT_GIT_EMAIL=bugbot@local
 LOG_DIR=./logs
 POLL_INTERVAL_MS=20000
 TIMEOUT_SECONDS=600
@@ -119,8 +131,15 @@ PROJECT_CONTEXT_FILE=
 | `CHAT_ID` | 云端必需 | 目标飞书群 ID |
 | `PORT` | 可选 | 云端监听端口，默认 `3000` |
 | `AGENT_API_TOKEN` | 推荐 | Worker API 鉴权 token，未设置时 Agent API 不鉴权 |
+| `LARK_VERIFICATION_TOKEN` | 修复按钮必需 | 飞书卡片回调 Verification Token；未配置 Encrypt Key 时用于验证回调来源 |
+| `LARK_ENCRYPT_KEY` | 可选 | 飞书 Encrypt Key；配置后卡片回调优先使用 `X-Lark-Signature` 和原始 body 验签 |
+| `FIX_ALLOWED_OPEN_IDS` | 可选 | 可触发修复和清理操作的飞书 `open_id` 白名单，逗号分隔；为空时不额外限制 |
+| `TASK_DB_PATH` | 可选 | 云端 SQLite 任务库路径，默认 `code/data/tasks.sqlite` |
 | `CLOUD_URL` | Worker 必需 | 云端服务地址 |
 | `REPO_PATH` | Worker 必需 | 待分析的前端项目路径；相对路径按仓库根目录（根目录 `.env` 所在目录）解析 |
+| `FIX_WORKTREE_ROOT` | 可选 | BugBot 专用 worktree 公共父目录；配置时必须为绝对路径，默认 `REPO_PATH` 同级的 `.bugbot-workspaces` |
+| `BUGBOT_GIT_NAME` | 可选 | 自动修复 commit 的 Git author name，默认 `BugBot` |
+| `BUGBOT_GIT_EMAIL` | 可选 | 自动修复 commit 的 Git author email，默认 `bugbot@local` |
 | `AGENT_API_TOKEN` | Worker 必需 | 同上，Worker 用于请求云端 |
 | `LOG_DIR` | 可选 | Worker 日志目录，默认 `./logs` |
 | `POLL_INTERVAL_MS` | 可选 | 轮询间隔（ms），默认 `20000` |
@@ -174,6 +193,8 @@ pnpm typecheck    # 类型检查
 
 Worker 需要本机安装 `AGENT_PROVIDER_ORDER` 中配置的 Agent CLI，并且 `REPO_PATH` 指向的前端项目已 clone。默认优先运行 Codex，再在失败时尝试 Claude Code；如果后台进程环境拿不到命令，可通过 `CODEX_EXECUTABLE` 或 `CLAUDE_EXECUTABLE` 显式指定可执行文件名或绝对路径。
 
+分析结论为 `resolved` 时，飞书结果卡片会显示“尝试修复”。修复在 `FIX_WORKTREE_ROOT/<项目名>/repo` 的长期 linked worktree 中进行，不修改开发者当前目录；完成后返回本地分支、commit SHA 和 `git cherry-pick <sha>` 命令。修复 runner 只使用首选 Agent，不在已有写入上自动切换 provider。
+
 Codex 使用 `codex exec --json` 无头模式分析。当前 provider 进程异常、超时、或 JSONL 结果不可解析时，Worker 会继续尝试 `AGENT_PROVIDER_ORDER` 中的下一个 provider；正常返回 `suspected`、`resolved` 或 `inconclusive` 时不会继续 fallback。
 
 ```bash
@@ -223,8 +244,17 @@ Worker 自动调用，也可手动测试：
 ```bash
 curl -X POST "http://127.0.0.1:3000/callback/analysis-result" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $AGENT_API_TOKEN" \
   -d '{"taskId":"t1","issueId":"BUG-123","status":"suspected","summary":"表单提交后 loading 未重置","reason":"finally 块缺少状态重置","files":["src/views/form.vue"]}'
 ```
+
+### 飞书卡片回调
+
+```http
+POST /callback/feishu/card
+```
+
+在飞书开放平台将卡片回调地址配置为该公网 URL，并把同一页面的 Verification Token 写入 `LARK_VERIFICATION_TOKEN`。配置 Encrypt Key 时同时设置 `LARK_ENCRYPT_KEY`。服务会处理 URL verification、验证正常回调，并幂等创建修复任务。
 
 ### Worker 任务 API（需 Bearer token）
 
@@ -320,3 +350,4 @@ scp lark-h5-bug-bot.tar.gz your-user@your-server:/path/to/deploy/
 - 架构设计 v3：`docs/architecture-proposal-v3.md`
 - Claude Code 调用规范：`docs/worker-claude-invocation.md`
 - 禅道 Bug 完整字段接入方案：`docs/zentao-bug-field-enrichment.md`
+- Bug 自动修复与本地交付：`docs/bug-fix-workflow-design.md`

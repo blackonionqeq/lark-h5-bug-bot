@@ -1,9 +1,9 @@
 import { error } from "./logger";
 import { describeFetchError, describeHttpFailure } from "./net-diagnostics";
-import type { AnalysisTask } from "../../code/src/types";
+import type { WorkerTask } from "../../code/src/types";
 
 export interface CloudTaskApi {
-  fetchPending(): Promise<AnalysisTask | null>;
+  fetchPending(): Promise<WorkerTask | null>;
   submitResult(
     taskId: string,
     patch: Record<string, unknown>
@@ -16,7 +16,7 @@ export function createCloudTaskApi(cloudUrl: string, agentToken: string): CloudT
     "Content-Type": "application/json",
   };
 
-  async function fetchPending(): Promise<AnalysisTask | null> {
+  async function fetchPending(): Promise<WorkerTask | null> {
     const url = `${cloudUrl}/agent/tasks/pending`;
     let res: Response;
 
@@ -34,7 +34,7 @@ export function createCloudTaskApi(cloudUrl: string, agentToken: string): CloudT
       return null;
     }
 
-    const data = (await res.json()) as { task: AnalysisTask | null };
+    const data = (await res.json()) as { task: WorkerTask | null };
     return data.task ?? null;
   }
 

@@ -2,6 +2,7 @@ import { describe, it, expect } from "bun:test";
 import { formatMessage } from "../format-message";
 import { makeAppEvent, makeAnalysisCallbackPayload, makeZentaoPayload } from "../../test-fixtures";
 import type { ZentaoParsedFields } from "../../types";
+import { buildAnalysisResultCard } from "../format-card";
 
 const testParsed: ZentaoParsedFields = {
   bugId: "100",
@@ -159,5 +160,15 @@ describe("formatMessage", () => {
       expect(result).toContain("customField");
       expect(result).toContain("hello");
     });
+  });
+});
+
+describe("buildAnalysisResultCard", () => {
+  it("only shows the fix button for resolved analysis with a task id", () => {
+    const resolved = JSON.stringify(buildAnalysisResultCard(makeAnalysisCallbackPayload({ status: "resolved" })));
+    const suspected = JSON.stringify(buildAnalysisResultCard(makeAnalysisCallbackPayload({ status: "suspected" })));
+    expect(resolved).toContain("尝试修复");
+    expect(resolved).toContain("fix.request");
+    expect(suspected).not.toContain("尝试修复");
   });
 });

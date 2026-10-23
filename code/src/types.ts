@@ -27,6 +27,10 @@ export interface AppConfig {
   chatID: string;
   port: number;
   agentApiToken?: string;
+  taskDbPath?: string;
+  larkVerificationToken?: string;
+  larkEncryptKey?: string;
+  fixAllowedOpenIds: string[];
   /** Map of display name → Feishu open_id for @ mentions */
   userMentions: Record<string, string>;
 }
@@ -90,6 +94,7 @@ export interface AnalysisProgressPayload extends Record<string, unknown> {
 }
 
 export interface AnalysisTask {
+  taskType?: "analysis.run";
   taskId: string;
   traceId: string;
   issueId?: string | number;
@@ -98,9 +103,86 @@ export interface AnalysisTask {
   status: "queued" | "claimed" | "running" | "completed" | "failed";
   triageResult?: TriageResult;
   analysisResult?: AnalysisResult;
+  repoSnapshot?: RepoSnapshot;
+  resultMessageId?: string;
   startedNotifiedAt?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface RepoSnapshot {
+  projectName: string;
+  commitSha: string;
+  dirty: boolean;
+}
+
+export type FixTaskStatus =
+  | "queued"
+  | "claimed"
+  | "preparing"
+  | "fixing"
+  | "validating"
+  | "committing"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+export type FixTaskOutcome =
+  | "ready_for_verification"
+  | "validation_failed"
+  | "no_changes"
+  | "stale_analysis"
+  | "workspace_conflict";
+
+export interface FixCheckResult {
+  command: string;
+  status: "passed" | "failed" | "skipped";
+  exitCode?: number | null;
+  summary?: string;
+}
+
+export interface FixTask {
+  taskType: "fix.run";
+  taskId: string;
+  analysisTaskId: string;
+  traceId: string;
+  issueId?: string | number;
+  projectName: string;
+  requestedBy: string;
+  status: FixTaskStatus;
+  outcome?: FixTaskOutcome;
+  baseCommitSha: string;
+  title: string;
+  description: string;
+  analysisResult: AnalysisResult;
+  branchName?: string;
+  commitSha?: string;
+  changedFiles?: string[];
+  checks?: FixCheckResult[];
+  resultNotifiedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FixCleanupTask {
+  taskType: "fix.cleanup";
+  taskId: string;
+  fixTaskId: string;
+  traceId: string;
+  projectName: string;
+  requestedBy: string;
+  resolution: "handled" | "discarded";
+  branchName: string;
+  commitSha: string;
+  status: "queued" | "claimed" | "running" | "completed" | "failed";
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type WorkerTask = AnalysisTask | FixTask | FixCleanupTask;
+
+export function getTaskType(task: WorkerTask): "analysis.run" | "fix.run" | "fix.cleanup" {
+  return task.taskType ?? "analysis.run";
 }
 
 export interface TriageResult {
@@ -118,10 +200,13 @@ export interface AnalysisResult {
 }
 
 export interface TaskStore {
-  enqueue(task: AnalysisTask): void;
-  claim(): AnalysisTask | null;
-  update(taskId: string, patch: Partial<AnalysisTask>): void;
-  get(taskId: string): AnalysisTask | undefined;
+  enqueue(task: WorkerTask): void;
+  claim<T extends WorkerTask = AnalysisTask>(): T | null;
+  update<T extends WorkerTask = AnalysisTask>(taskId: string, patch: Partial<T>): void;
+  get<T extends WorkerTask = AnalysisTask>(taskId: string): T | undefined;
+  findActiveFixByAnalysisTask(analysisTaskId: string): FixTask | undefined;
+  findFixByAnalysisTask(analysisTaskId: string): FixTask | undefined;
+  close?(): void;
 }
 
 export interface FeishuTokenResponse {

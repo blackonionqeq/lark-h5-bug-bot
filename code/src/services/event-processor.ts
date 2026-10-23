@@ -1,7 +1,9 @@
-import { sendMessageToChat } from "./feishu";
+import { sendCardToChat, sendMessageToChat } from "./feishu";
 import { enqueueTask } from "./local-task";
 import { formatMessage } from "../utils/format-message";
-import type { AppConfig, AppEvent, EventMeta, EventSource, EventType, ZentaoParsedFields } from "../types";
+import { buildAnalysisResultCard } from "../utils/format-card";
+import { taskStore } from "./task-store";
+import type { AnalysisCallbackPayload, AppConfig, AppEvent, EventMeta, EventSource, EventType, ZentaoParsedFields } from "../types";
 
 export function createEvent<TPayload extends Record<string, unknown>>({
   source,
@@ -51,8 +53,32 @@ export async function handleEvent(event: AppEvent, config: AppConfig) {
     }
   }
 
-  const messageContent = formatMessage(event, config.userMentions);
-  const messageResult = await sendMessageToChat(config, messageContent);
+  let messageResult: Record<string, unknown> | undefined;
+  if (event.type === "analysis.result.received") {
+    const payload = event.payload as AnalysisCallbackPayload;
+    const analysisTask = payload.taskId ? taskStore.get(payload.taskId) : undefined;
+    const allowFix = !!(
+      (config.larkEncryptKey || config.larkVerificationToken) &&
+      analysisTask?.repoSnapshot &&
+      !analysisTask.repoSnapshot.dirty
+    );
+    messageResult = await sendCardToChat(config, buildAnalysisResultCard(payload, allowFix));
+    if (payload.taskId) {
+      const messageId = typeof messageResult?.message_id === "string" ? messageResult.message_id : undefined;
+      taskStore.update(payload.taskId, {
+        analysisResult: {
+          status: payload.status as "suspected" | "resolved" | "inconclusive" | "skipped" | "failed",
+          summary: payload.summary ?? "",
+          reason: payload.reason ?? "",
+          files: payload.files ?? [],
+        },
+        resultMessageId: messageId,
+      });
+    }
+  } else {
+    const messageContent = formatMessage(event, config.userMentions);
+    messageResult = await sendMessageToChat(config, messageContent);
+  }
 
   return {
     traceId: event.traceId,
