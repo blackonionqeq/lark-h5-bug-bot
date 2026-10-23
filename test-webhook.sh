@@ -107,10 +107,17 @@ esac
 echo -e "\n"
 
 echo "=== 2) POST /callback/analysis-result（模拟 worker 回传结果）==="
-curl -s -X POST "$BASE/callback/analysis-result" \
-  -H 'Content-Type: application/json' \
-  -d '{"taskId":"task-456","issueId":"12345","traceId":"trace-789","status":"suspected","summary":"定位到组件卸载后 setState 导致白屏","reason":"列表组件在 unmount 后仍持有异步回调，setState 触发对已卸载组件的更新","triageLabel":"frontend","triageSource":"rule","files":["src/views/List/index.vue"]}'
-echo -e "\n"
+# 该路由在配置了 AGENT_API_TOKEN 时同样校验 Bearer 令牌，必须带 Authorization，
+# 否则返回 {"success":false,"error":"unauthorized"}（不是链路坏了）。
+if [ -z "$BUG_BOT_CRED" ]; then
+  echo "跳过：没读到 agent API 令牌（可用 BUG_BOT_CRED 环境变量传入，或检查 $ENV_FILE）"
+else
+  curl -s -X POST "$BASE/callback/analysis-result" \
+    -H 'Content-Type: application/json' \
+    -H "Authorization: ${SCHEME} ${BUG_BOT_CRED}" \
+    -d '{"taskId":"task-456","issueId":"12345","traceId":"trace-789","status":"suspected","summary":"定位到组件卸载后 setState 导致白屏","reason":"列表组件在 unmount 后仍持有异步回调，setState 触发对已卸载组件的更新","triageLabel":"frontend","triageSource":"rule","files":["src/views/List/index.vue"]}'
+  echo -e "\n"
+fi
 
 echo "=== 3) GET /agent/tasks/pending（无任务时应返回 task:null）==="
 if [ -z "$BUG_BOT_CRED" ]; then
