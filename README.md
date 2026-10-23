@@ -193,7 +193,7 @@ pnpm typecheck    # 类型检查
 
 Worker 需要本机安装 `AGENT_PROVIDER_ORDER` 中配置的 Agent CLI，并且 `REPO_PATH` 指向的前端项目已 clone。默认优先运行 Codex，再在失败时尝试 Claude Code；如果后台进程环境拿不到命令，可通过 `CODEX_EXECUTABLE` 或 `CLAUDE_EXECUTABLE` 显式指定可执行文件名或绝对路径。
 
-分析结论为 `resolved` 时，飞书结果卡片会显示“尝试修复”。修复在 `FIX_WORKTREE_ROOT/<项目名>/repo` 的长期 linked worktree 中进行，不修改开发者当前目录；完成后返回本地分支、commit SHA 和 `git cherry-pick <sha>` 命令。修复 runner 只使用首选 Agent，不在已有写入上自动切换 provider。
+分析结论为 `resolved` 时，飞书结果卡片会显示“尝试修复”。修复在 `FIX_WORKTREE_ROOT/<项目名>/repo` 的长期 linked worktree 中进行，不修改开发者当前目录；完成后返回本地分支、commit SHA 和 `git cherry-pick <sha>` 命令。修复 runner 只使用首选 Agent，不在已有写入上自动切换 provider。首次启用或按钮未显示时，按 [Bug 自动修复配置与排障指南](docs/auto-fix-setup-guide.md) 逐项核对。
 
 Codex 使用 `codex exec --json` 无头模式分析。当前 provider 进程异常、超时、或 JSONL 结果不可解析时，Worker 会继续尝试 `AGENT_PROVIDER_ORDER` 中的下一个 provider；正常返回 `suspected`、`resolved` 或 `inconclusive` 时不会继续 fallback。
 
@@ -345,8 +345,9 @@ scp lark-h5-bug-bot.tar.gz your-user@your-server:/path/to/deploy/
 
 ---
 
-## 七、架构设计文档
+## 七、文档
 
+- Bug 自动修复配置与排障指南：`docs/auto-fix-setup-guide.md`
 - 架构设计 v3：`docs/architecture-proposal-v3.md`
 - Claude Code 调用规范：`docs/worker-claude-invocation.md`
 - 禅道 Bug 完整字段接入方案：`docs/zentao-bug-field-enrichment.md`
